@@ -45,6 +45,24 @@ Loading, CRS conversion etc.
 
 ```{r}
 
+# get municipalities
+muns <- readRDS("data/gadm36_DNK_2_sp.rds") %>% st_as_sf() 
+
+
+muns$NAME_2[31] <- "Aarhus"
+muns$NAME_2[21] <- "Høje-Taastrup"
+muns$NAME_2[25] <- "Copenhagen"
+
+# join up
+
+mun_vote <- muns %>% 
+  select(NAME_2)
+mun_vote
+
+library(mapview)
+mapview(mun_vote)
+
+
 ```
 
 ## sub-title
