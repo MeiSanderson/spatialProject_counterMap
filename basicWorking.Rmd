@@ -3,10 +3,16 @@ title: "basicWorking"
 author: "MeiSanderson"
 date: "2026-04-29"
 output: html_document
+  rmdformats::readthedown:
+    highlight: kate
 ---
 
 ```{r setup, include=FALSE}
 ## Global options
+library(pacman)
+
+pacman::p_load(rmdformats, knitr)
+
 options(max.print="75")
 opts_chunk$set(echo=TRUE,
 	             cache=TRUE,
@@ -21,9 +27,7 @@ opts_knit$set(width=75)
 
 ```{r load_libraries}
 
-library(pacman)
-
-pacman::p_load(rmdformats, sfnetworks,
+pacman::p_load(sfnetworks,
                sf,
                tidygraph,
                tidyverse,
@@ -32,7 +36,7 @@ pacman::p_load(rmdformats, sfnetworks,
                units,
                mapview)
 
-#pacman::p_load(slopes)
+pacman::p_load(slopes)
 
 
 ```
@@ -43,35 +47,183 @@ pacman::p_load(rmdformats, sfnetworks,
 
 Loading, CRS conversion etc.
 
-```{r}
+1)
+```{r, prepare base map: aarhus commune}
+
+## BASEMAP;   inspiration from class scripts
 
 # get municipalities
 muns <- readRDS("data/gadm36_DNK_2_sp.rds") %>% st_as_sf() 
-
-
 muns$NAME_2[31] <- "Aarhus"
-muns$NAME_2[21] <- "Høje-Taastrup"
-muns$NAME_2[25] <- "Copenhagen"
 
-# join up
 
-mun_vote <- muns %>% 
-  select(NAME_2)
-mun_vote
+# filter to only extract Aarhus
+baseMap <- filter(muns, NAME_2 == "Aarhus")
 
-library(mapview)
-mapview(mun_vote)
+
+# save CRS
+baseMap_crs = st_crs(baseMap) # longlat, WGS84
+
+# view
+mapview(baseMap)
 
 
 ```
 
-## sub-title
 
-text
+2)
+
+```{r, prepare road network}
+
+## inspiration from class scripts (specifically, class 06, which is based on luukvdmeer.github.io/UseR2024/notebook.html)
+
+
+# query the stress within our area (i.e., Aarhus commune) from OpenStreetMap
+assign("has_internet_via_proxy", TRUE, environment(curl::has_internet)) # telling R that we do in fact have wifi
+
+streets <- osmdata::opq(sf::st_bbox(baseMap)) %>% # generate surrounding box
+  osmdata::add_osm_feature(key = "highway") %>% # highway describes all roads and footpaths; one could also set a value to get a specific type of road (e.g., living_street, pedestrian or motorway; wiki.openstreetmap.org/wiki/Map_features#Highway) - might be interesting for future research to assess which roads (are close to benches) and how much noise pollution come from them
+  osmdata::osmdata_sf() %>%
+  osmdata::osm_poly2line() %>%
+  purrr::pluck("osm_lines") %>%
+  sf::st_intersection(baseMap) %>%
+  sf::st_cast("MULTILINESTRING") %>%
+  sf::st_cast("LINESTRING")
+
+
+# save the road data
+saveRDS(streets, "data/streets_osm.rds")
+
+
+```
+
+```{r, load in the streets/road data if already computed}
+
+streets <- readRDS("data/streets_osm.rds")
+
+streets <- streets %>% 
+  dplyr::select(osm_id, highway) # simplying the dataset
+
+```
+
+
+
+3)
+
+```{r, prepare benches data}
+
+## inspiration from luukvdmeer.github.io/UseR2024/notebook.html
+
+
+# query the benches within our area (i.e., Aarhus commune) from OpenStreetMap
+benches <- osmdata::opq(sf::st_bbox(baseMap)) %>% # generate surrounding box
+  osmdata::add_osm_feature(key = "amenity", value = "bench") %>%
+  osmdata::osmdata_sf() %>%
+  purrr::pluck("osm_points") %>%
+  sf::st_intersection(baseMap)
+
+
+# save the road data
+saveRDS(benches, "data/benches_osm.rds")
+
+```
+
+```{r, load in the benches data if already computed}
+
+benches <- readRDS("data/benches_osm.rds")
+
+print(colnames(benches)) # it includes bench data as well as various other details such as the colour, ability to lie down on it, separated seats etc.
+
+```
+
+
+_NOTE:_ As OpenStreetMap also uses the WGS84 (4326) CRS, there is no need for CRS conversion
+
+
+```{r, visual assessment}
+
+par(mar = c(0, 0, 0, 0))
+plot(sf::st_geometry(streets))
+plot(sf::st_geometry(benches), col = "red", pch = 20, cex = 0.5, add = TRUE)
+
+```
+
+
+
+## Combine (i.e., overlay) the layers
+
+-> not needed?
 
 ```{r}
 
 ```
+
+
+
+
+
+## Possible: Visualisation
+
+We could consider plotting walking travel time to a bench for this map of all of Aarhus Commune - especially, if we are to focus on a smaller area of Aarhus Commune for the remainding analysis
+-> still i think this might be overly simplistic
+
+```{r}
+
+## inspiration from class scripts (specifically, class 06, which is based on luukvdmeer.github.io/UseR2024/notebook.html)
+
+# prepare the streets data
+streets <- readRDS("data/streets_osm.rds")
+streets <- streets %>% dplyr::select(osm_id, name, surface) # simply to work with less data at the moment
+
+streets$length = sf::st_length(streets) %>% units::set_units("m")
+
+
+# utilise a Digital Elevation Model (i.e., DEM), a spatial grid with elevation values for a certain area
+dem <- raster("data/DNK_msk_alt.grd")
+dem <- crop(dem, st_bbox(baseMap))
+gradients <- slopes::slope_raster(streets, dem, directed = TRUE) * 100
+
+st_crs(dem) # appears to be the same as streets
+
+
+# set an average speed that can in- or decrease based on the gradient/slope of the street; though with a min and max speed
+# CHOSEN PARAMETERS (as meters/hour): max speed = x, min speed = x; average speed (i.e., default) = x
+# these are randomly chosen cause idk, and i actually don't think these plots are useful / meaningful
+maxSpeed_walk = 20
+minSpeed_walk = 5
+avgSpeed_walk = 10
+
+# !! if using a basic linear relation between gradient and speed
+estimate_speed <-function(gradient, default = avgSpeed_walk, max = maxSpeed_walk, min = minSpeed_walk) {
+  ifelse(  # is gradient less than 0 (i.e., going downhill)? then increase speed; if above 0, tehn decrease speed
+    gradient < 0, 
+    min(default + 0.8 * abs(gradient), max), # downhill
+    max(default - 1.4 * gradient, min) # uphill
+  )
+}
+
+streets$speed <- sapply(gradients, estimate_speed) %>% units::set_units("m/h")
+
+plot(dplyr::select(streets, speed))
+
+
+# convert to meters
+streets$time <-units::set_units(streets$length / streets$speed, "min")
+
+plot(dplyr::select(streets, time))
+
+
+```
+
+
+
+
+
+## Possible Next Step:  plot homeless shelters in Aarhus and assess the distance from those to benches
+
+
+
+
 
 
 
@@ -80,7 +232,61 @@ text
 # Hot and Cold Spot Analysis
 
 
-## sub-title
+Using the sfhotspot library
+- Introduction to library as used as inspiration (https://lesscrime.info/post/sfhotspot-1-0-0/)   For more detail: https://pkgs.lesscrime.info/sfhotspot/
+
+
+
+## Libraries
+text
+
+```{r}
+
+pacman::p_load(ggspatial, ggfortify) # ?
+  
+pacman::p_load(sfhotspot, # for the hot/cold-spot analysis
+               ggplot2) # for nice plots
+
+
+```
+
+
+## Plot the basemap with our layers (just benches - for now at least)
+
+text
+
+```{r}
+
+# haven't found the right functions
+
+
+```
+
+
+## 1) Counting points (i.e., number of benches)
+
+-> important issues with this approach mentioned here: https://lesscrime.info/post/sfhotspot-1-0-0/
+
+```{r}
+
+benches <- readRDS("data/benches_osm.rds")
+
+baseMap_grid <- hotspot_grid(baseMap, quiet = TRUE) # overlay grid over baseMap
+
+benches_count_grid <- hotspot_count(benches, grid = baseMap_grid) # count benches pr. grid cell
+
+ggplot() +
+  autolayer(benches_count_grid, alpha = 0.75) +
+  scale_fill_distiller(direction = 1) +
+  #geom_sf(data = benches, size = 0.1) +  # plots the actual benchs
+  labs(fill = "count of\npoints in\neach cell") +
+  theme_void()
+
+
+```
+
+
+## 2) Estimating point density
 
 text
 
@@ -90,7 +296,8 @@ text
 
 
 
-## sub-title
+
+## 3) Finding hotspots
 
 text
 
@@ -98,6 +305,27 @@ text
 
 ```
 
+
+
+
+## 3.1) Categorise hotspots
+
+text
+
+```{r}
+
+```
+
+
+
+
+## sub-title
+
+text
+
+```{r}
+
+```
 
 
 
