@@ -381,48 +381,232 @@ ggplot() +
 
 
 
-## sub-title
+## Attribute analysis
 
-text
+Creating a foundation for classifying benches as inclusive vs exclusionary based on presence / absence of particular attributes.
 
 ```{r}
+
+# benches dataset, as loaded above
+
+# inclusive exclusionary - poissibly relevant attributes to consider
+inex_cols <- c("backrest","armrest","lying_down","seats","covered","material", "seats.separated","two_sided")
+#inex_cols
+
+# simply for inspection
+benches %>% 
+  st_drop_geometry() %>% 
+  dplyr::select(inex_cols) %>%
+  summary()
+
+# length is quite uninformative as yes... all the columns have an equal number of rows but NAs are
+# overlooked so we attend to that next!
+
+## count NA's in each inex_col
 
 ```
 
 
+```{r} 
 
+# now we create some basis for classifying the benches into inclusive vs exclusionary groups
 
+inex_benches <- benches %>% 
+  dplyr::mutate(
+  
+    # backrest
+    has_backrest = case_when(
+      backrest == "yes" ~ TRUE,
+      backrest == "no"  ~ FALSE,
+      TRUE              ~ NA   # anything else (including NA) stays unknown
+    ),
+    
+    # armrest
+    has_armrest = case_when(
+      armrest == "yes" ~ TRUE,
+      armrest == "no"  ~ FALSE,
+      TRUE             ~ NA
+    ),
+    
+    # can lie down
+    can_lie_down = case_when(
+      lying_down == "yes" ~ TRUE,
+      lying_down == "no"  ~ FALSE,
+      TRUE                ~ NA
+    ),
+    
+    # covered (shelter from rain)
+    is_covered = case_when(
+      covered == "yes" ~ TRUE,
+      covered == "no"  ~ FALSE,
+      TRUE             ~ NA
+    ),
+    
+    # separated seats (armrests between seats — exclusionary for rough sleeping)
+    has_separated_seats = case_when(
+      seats.separated == "yes" ~ TRUE,
+      seats.separated == "no"  ~ FALSE,
+      TRUE                     ~ NA
+    ),
+  
+    
+   # determining the state of a bench!
+    is_inclusive = case_when(
+      
+    # --- exclusionary ---
+    has_separated_seats == TRUE                                          ~ "exclusive",
+    has_backrest == FALSE                                                ~ "exclusive",
+    has_armrest == FALSE                                                 ~ "exclusive",
+  
+    # --- inclusive ---
+    has_backrest == TRUE & has_armrest == TRUE & is_covered == TRUE      ~ "inclusive_covered",
+    has_backrest == TRUE & has_armrest == TRUE                           ~ "inclusive",
+  
+    TRUE                                                                 ~ NA_character_
+  ))
 
-## sub-title
-
-text
-
-```{r}
+cat("Inclusivity classification:\n")
+table(inex_benches$is_inclusive, useNA = "always")
 
 ```
 
 
+## Map confirmed inclusive / exclusive / unknown
 
-
-
-
-## sub-title
-
-text
+Actually not a helpful visual atm, i think i messed something up here with the var names so I'll return to it tomorrow.
 
 ```{r}
+
+benches_utm <- st_transform_auto(inex_benches)
+
+# separate into confirmed groups only — NA benches plotted separately
+benches_in <- filter(benches_utm, is_inclusive == TRUE)
+benches_ex <- filter(benches_utm, is_inclusive == FALSE)
+benches_unknown   <- filter(benches_utm, is.na(is_inclusive))
+
+ggplot() +
+  geom_sf(data = baseMap_utm, fill = "grey97", colour = "grey60") +
+  geom_sf(data = benches_unknown,   colour = "grey75", size = 0.5, alpha = 0.5) +
+  geom_sf(data = benches_in, colour = "#2166ac", size = 3, alpha = 0.9) +
+  geom_sf(data = benches_ex, colour = "#d6604d", size = 3, alpha = 0.9) +
+  labs(
+    title    = "Bench Inclusivity in Aarhus Commune",
+    subtitle = "Blue = inclusive | Red = exclusive | Grey = unconfirmed (NA)"
+  ) +
+  theme_void()
+
+
+```
+
+## Voronoi - Service Areas (zoom to study area(s))
+
+Need to adjust bbox coordinates for our chosen area - this is incredibly large and uninformative right now.
+Can use mapview(baseMap_utm) to find the (approximately) right values interactively. 
+
+Essentially, this section is just kind of a proof-of-concept right now!
+
+```{r, voronoi study area}
+
+study_bbox <- st_bbox(
+  c(xmin = 565000, ymin = 6220000, xmax = 572000, ymax = 6226000),  # <- adjust
+  crs = st_crs(baseMap_utm)
+) %>% st_as_sfc()
+
+benches_study_all <- st_intersection(benches_utm, study_bbox)
+benches_study_in  <- st_intersection(benches_in, study_bbox)
+benches_study_ex  <- st_intersection(benches_ex, study_bbox)
+baseMap_study     <- st_intersection(baseMap_utm, study_bbox)
+
+cat(sprintf("Benches in study area: %d total | %d inclusive | %d exclusive | %d NA\n",
+  nrow(benches_study_all),
+  nrow(benches_study_in),
+  nrow(benches_study_ex),
+  nrow(benches_study_all) - nrow(benches_study_in) - nrow(benches_study_ex)
+))
+
+```
+
+```{r, voronoi poygons}
+
+make_voronoi <- function(points, clip_area) {
+  points %>%
+    st_geometry() %>%
+    st_union() %>%
+    st_voronoi() %>%
+    st_collection_extract("POLYGON") %>%
+    st_sf() %>%
+    st_intersection(clip_area) %>%
+    mutate(area_m2 = as.numeric(st_area(geometry)))
+}
+
+voronoi_all <- make_voronoi(benches_study_all, study_bbox)
+voronoi_in <- make_voronoi(benches_study_in, study_bbox)
 
 ```
 
 
+```{r, voronoi plot}
+
+p_vor_all <- ggplot() +
+  geom_sf(data = voronoi_all, aes(fill = area_m2), colour = "white", linewidth = 0.2) +
+  geom_sf(data = benches_study_all, size = 0.8, colour = "black") +
+  geom_sf(data = baseMap_study, fill = NA, colour = "grey30") +
+  scale_fill_viridis_c(option = "plasma", direction = -1, labels = scales::comma) +
+  labs(title = "Voronoi: All Benches", fill = "service area (m²)") +
+  theme_void()
+
+p_vor_incl <- ggplot() +
+  geom_sf(data = voronoi_in, aes(fill = area_m2), colour = "white", linewidth = 0.2) +
+  geom_sf(data = benches_study_in, size = 0.8, colour = "#2166ac") +
+  geom_sf(data = baseMap_study, fill = NA, colour = "grey30") +
+  scale_fill_viridis_c(option = "mako", direction = -1, labels = scales::comma) +
+  labs(title = "Voronoi: Inclusive Benches Only", fill = "service area (m²)") +
+  theme_void()
+
+#p_vor_all + p_vor_incl
 
 
+```
 
-## sub-title
 
-text
+```{r, voronoi summary}
 
-```{r}
+cat("=== All benches — service area (m²) ===\n")
+summary(voronoi_all$area_m2)
+
+cat("\n=== Inclusive benches only — service area (m²) ===\n")
+summary(voronoi_in$area_m2)
+
+ratio <- mean(voronoi_in$area_m2) / mean(voronoi_all$area_m2)
+cat(sprintf("\nMean service area is %.1fx larger when restricted to inclusive benches.\n", ratio))
+
+```
+
+
+## Demographic Overlay
+
+An idea for using dkstat data which is a part of the opengov dk intitative: https://github.com/rOpenGov/dkstat 
+We could use IDs to identify different demographics spread through aarhus - not sure if an ID for e.g., 'homeless' or socialt udsatte exists or one for elderly people exists but it might be a nice (maybe) way to get an understanding of how the presence and distribution of benches say something about how we care (or not) about various demographics of people.
+
+```{r, elderly}
+
+install.packages(
+  "dkstat",
+  repos = c(
+    ropengov = "https://ropengov.r-universe.dev",
+    getOption("repos")
+  )
+)
+
+meta <- dkstat::dst_meta("", lang = "en") # need to test an ID
+meta$variables
+
+```
+
+
+```{r, homeless}
+
+# ...
 
 ```
 
