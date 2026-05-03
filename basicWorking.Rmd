@@ -54,7 +54,7 @@ Loading, CRS conversion etc.
 
 # get municipalities
 muns <- readRDS("data/gadm36_DNK_2_sp.rds") %>% st_as_sf() 
-muns$NAME_2[31] <- "Aarhus"
+muns$NAME_2[31] <- "Aarhus" # from århus to aarhus
 
 
 # filter to only extract Aarhus
@@ -220,11 +220,21 @@ plot(dplyr::select(streets, time))
 
 
 ## Possible Next Step:  plot homeless shelters in Aarhus and assess the distance from those to benches
+OpenStreetMap does have a value for the amenity key called 'social_facility', which describes facilities providing social services such as group & nursing homes etc. in addition to someless shelters. And idk if we can extract something specific from a value (like social_facility), so we might have to find the data elsewhere or plot it ourselves (assuming that there would only be so mnay homeless shelters).
+
+-> i assume we are thinking specifically of places where sleep is possible(?); otherwise there are also various 'væresteder' but i don't think they give beds for the night
+
+_examples found of homeless shelters in Aarhus (DK: herberger (specifically the sleeping arrangements) / varmestue ("a place to go") / hjemløsetilbud)_
+- Aarhus Vinterherberg (specifically for non-Danish homeless people AND only in the winter months) (blaakors.dk/vores-arbejde/noedherberger)
+- Varmestue Herning (in Herning, so only important if examining Aarhus Commune)
+- Spor 7 (Godsbanen; natvarmestue)
+- Kirkens Korshær Herberget Tre Ege
+- Omsorgscenter Pitstop (viby; omsorgscenter for  syge hjemløse og funktionelt hjemløse i Aarhus Kommune) (rodekors.dk/vores-arbejde/socialt-arbejde/hjemloese/omsorgscenter-pitstop?gad_source=1&gad_campaignid=23814314290&gclid=CjwKCAjw5NvPBhAoEiwA_2egfiD_SeISgOoQMtUX1mCNiw08K9-zdqpzBCMfNZgBMhWqXyEHQQ19wxoCEQ4QAvD_BwE)
 
 
-
-
-
+_potentially relevant sources_
+- information about 'Varmestuer' in DK by Kirkens Korshær: https://kirkenskorshaer.dk/2025/09/varmestuer/
+- 'når menneskesynet vakler: Aarhus svigter de mest udsatte': https://jyllands-posten.dk/jpaarhus/debat/breve/ECE18502465/naar-menneskesynet-vakler-aarhus-svigter-de-mest-udsatte/
 
 
  - - - - -  - - - - -  - - - - -  - - - - -  - - - - -  - - - - -  - - - - -  - - - - -  - - - - -  - - - - -  - - - - - 
@@ -232,13 +242,15 @@ plot(dplyr::select(streets, time))
 # Hot and Cold Spot Analysis
 
 
-Using the sfhotspot library
-- Introduction to library as used as inspiration (https://lesscrime.info/post/sfhotspot-1-0-0/)   For more detail: https://pkgs.lesscrime.info/sfhotspot/
+Using the sfhotspot library (https://pkgs.lesscrime.info/sfhotspot/)
+- Introduction to library as used as inspiration (https://lesscrime.info/post/sfhotspot-1-0-0/)
 
+
+-> as it mainly follows these workflows due look the functions up and assess
 
 
 ## Libraries
-text
+Not sure which is needed yet other than sfhotspot and ggplot2
 
 ```{r}
 
@@ -286,35 +298,85 @@ ggplot() +
 ```
 
 
-## 2) Estimating point density
+## 1.2) Estimating point density; alternative to the counts
 
-text
+Based on 2-dimensional kernel-densit-estimation using point densities instead of counts
 
-```{r}
+```{r, with degree-based cells}
+
+benches <- readRDS("data/benches_osm.rds")
+
+baseMap_grid <- hotspot_grid(baseMap) # overlay grid over baseMap
+
+benches_kde <- hotspot_kde(benches, grid = baseMap_grid) # try with different reductions (%) of the default bandwidth: bandwidth_adjust = 0.4
+
+ggplot() +
+  autolayer(benches_kde, alpha = 0.75) +
+  geom_sf(data = baseMap, colour = "grey20", fill = NA) +
+  scale_fill_distiller(direction = 1) +
+  labs(title = "Density of Benches in Aarhus Commune", fill = "density of benches") +
+  theme_void() 
+
+
+```
+
+
+```{r, with meter-based cells}
+
+
+# transforming data from lat/lon to a suitable meter-based coordinate system for this plot to have cells of more meaningful (as least to us) sizes
+benches <- readRDS("data/benches_osm.rds")
+
+benches_utm <- st_transform_auto(benches) # automatically transform from lat/lon to a suitable meter-based system
+baseMap_utm <- st_transform_auto(baseMap, quiet = TRUE) # quiet simply suppresses some messages
+baseMap_grid_utm <- st_transform_auto(baseMap_grid, quiet = TRUE)
+
+
+# actual plot
+
+benches <- readRDS("data/benches_osm.rds")
+
+baseMap_grid <- hotspot_grid(baseMap, quiet = TRUE) # overlay grid over baseMap
+
+benches_kde_utm <- hotspot_kde(benches_utm, grid = baseMap_grid_utm, bandwidth_adjust = 0.4) # try with different reductions (%) of the default bandwidth
+
+ggplot() +
+  autolayer(benches_kde_utm, alpha = 0.75) +
+  geom_sf(data = baseMap_utm, colour = "grey20", fill = NA) +
+  scale_fill_distiller(direction = 1) +
+  labs(title = "Density of Benches in Aarhus Commune", fill = "density of benches") +
+  theme_void() 
+
 
 ```
 
 
 
 
-## 3) Finding hotspots
+## 2) Finding hotspots
 
-text
+Which cells in our grid have more benches than would be expected by "chance"
 
 ```{r}
+
+benches_gistar <- hotspot_gistar(benches_utm, grid = baseMap_grid_utm, bandwidth_adjust = 0.4) %>%  # try with different reductions (%) of the default bandwidth
+  dplyr::filter(gistar > 0, pvalue < 0.05)
+
+
+# hotspots as per cells with significantly more benches tha expected per "change"
+ggplot() +
+  geom_sf(aes(color = kde, fill = kde), data = benches_gistar, alpha = 0.75, colour = NA) +
+  geom_sf(data = baseMap_utm, colour = "grey20", fill = NA) +
+  scale_fill_distiller(aesthetics = c("colour", "fill"), direction = 1) +
+  labs(title = "Density of Benches in Aarhus Commune", fill = "density of benches (kde)") +
+  theme_void() 
+
 
 ```
 
 
-
-
-## 3.1) Categorise hotspots
-
-text
-
-```{r}
-
-```
+# OTHER POSSIBLE/POTENTIAL EXTENSIONS OF THE HOT/COLD SPOT ANALYSIS
+- using 'hotspot_dual_kde()' to compare the kernel density of two layers of points;       perhaps to estimate the bench placements relative to local population or something
 
 
 
@@ -328,5 +390,40 @@ text
 ```
 
 
+
+
+
+## sub-title
+
+text
+
+```{r}
+
+```
+
+
+
+
+
+
+## sub-title
+
+text
+
+```{r}
+
+```
+
+
+
+
+
+## sub-title
+
+text
+
+```{r}
+
+```
 
 
