@@ -1,0 +1,183 @@
+---
+title: "Spatial - Voronoi Benches Exploration"
+author: "aiswary-a"
+date: "2026-05-04"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r voronoi-prep}
+# Transform everything to UTM 32N
+baseMap_utm  <- st_transform(baseMap, 25832)
+inex_benches <- st_transform(inex_benches, 25832)
+
+# Keep only benches with a definite inclusive/exclusionary label
+benches_marked <- dplyr::filter(inex_benches, !is.na(is_inclusive))
+
+
+cat(sprintf(
+  "Marked benches: %d total | %d inclusive | %d exclusionary\n",
+  nrow(benches_marked),
+  sum(benches_marked$is_inclusive == "inclusive"),
+  sum(benches_marked$is_inclusive == "exclusive")
+))
+```
+
+```{r voronoi-polygons}
+voronoi_raw <- benches_marked %>%
+  st_geometry() %>%
+  st_union() %>%
+  st_voronoi() %>%
+  st_collection_extract("POLYGON") %>%
+  st_sf() %>%
+  st_intersection(st_make_valid(baseMap_utm))
+
+voronoi_labelled <- voronoi_raw %>%
+  st_join(benches_marked["is_inclusive"], join = st_nearest_feature) %>%
+  mutate(
+    area_m2  = as.numeric(st_area(geometry)),
+    category = ifelse(is_inclusive == "inclusive", "Inclusive", "Exclusive")
+  )
+```
+
+```{r voronoi-plot, fig.width=9, fig.height=7}
+theme_ppt <- theme_void(base_family = "sans") +
+  theme(
+    plot.title      = element_text(face = "bold", size = 15, hjust = 0.5, margin = margin(b = 4)),
+    plot.subtitle   = element_text(colour = "grey40", size = 10, hjust = 0.5, margin = margin(b = 10)),
+    legend.position = "bottom",
+    legend.title    = element_text(size = 9),
+    legend.text     = element_text(size = 8)
+  )
+
+ggplot() +
+  geom_sf(data = voronoi_labelled, aes(fill = category),
+          colour = "white", linewidth = 0.2, alpha = 0.7) +
+  geom_sf(data = baseMap_utm, fill = NA, colour = "grey40", linewidth = 0.5) +
+  geom_sf(data = benches_marked, aes(colour = is_inclusive), size = 1.2, show.legend = FALSE) +
+  scale_fill_manual(values = c("Inclusive" = "forestgreen", "Exclusive" = "#f06292"),
+                    name = "Service area") +
+  scale_colour_manual(values = c("inclusive" = "darkgreen", "exclusive" = "#c2185b")) +
+  guides(fill = guide_legend(title.position = "top", title.hjust = 0.5,
+                             override.aes = list(alpha = 0.85, size = 5))) +
+  labs(
+    title    = "Who Does Each Bench Serve? (Aarhus Municipality, Denmark)",
+    subtitle = "Voronoi Diagram - Each region shows the area served by its nearest bench"
+  ) +
+  theme_ppt
+
+p_load(mapview)
+mapview(voronoi_labelled, zcol = "category")
+```
+
+```{r voronoi-summary}
+voronoi_labelled %>%
+  st_drop_geometry() %>%
+  group_by(category) %>%
+  summarise(
+    n         = n(),
+    mean_m2   = round(mean(area_m2)),
+    median_m2 = round(median(area_m2)),
+    .groups = "drop"
+  ) %>%
+  print()
+```
+
+
+
+```{r voronoi-polygons}
+# Use ALL benches including NA
+voronoi_raw <- inex_benches %>%
+  st_geometry() %>%
+  st_union() %>%
+  st_voronoi() %>%
+  st_collection_extract("POLYGON") %>%
+  st_sf() %>%
+  st_intersection(st_make_valid(baseMap_utm))
+
+voronoi_labelled <- voronoi_raw %>%
+  st_join(inex_benches["is_inclusive"], join = st_nearest_feature) %>%
+  mutate(
+    area_m2  = as.numeric(st_area(geometry)),
+    category = case_when(
+      is_inclusive == "inclusive" ~ "Inclusive",
+      is_inclusive == "exclusive" ~ "Exclusive",
+      TRUE ~ "Unknown"
+    )
+  )
+```
+
+```{r voronoi-plot, fig.width=9, fig.height=7}
+theme_ppt <- theme_void(base_family = "sans") +
+  theme(
+    plot.title    = element_text(face = "bold", size = 15, hjust = 0.5, margin = margin(b = 4)),
+    plot.subtitle = element_text(colour = "grey40", size = 10, hjust = 0.5, margin = margin(b = 10)),
+    legend.position = "bottom",
+    legend.title  = element_text(size = 9),
+    legend.text   = element_text(size = 8)
+  )
+
+ggplot() +
+  geom_sf(data = voronoi_labelled, aes(fill = category),
+          colour = "white", linewidth = 0.2, alpha = 0.7) +
+  geom_sf(data = baseMap_utm, fill = NA, colour = "grey40", linewidth = 0.5) +
+  geom_sf(data = inex_benches, aes(colour = is_inclusive), size = 1.2, show.legend = FALSE) +
+  scale_fill_manual(
+    values = c("Inclusive" = "forestgreen", "Exclusive" = "red3", "Unknown" = "grey70"),
+    name = "Service area"
+  ) +
+  scale_colour_manual(
+    values = c("inclusive" = "darkgreen", "exclusive" = "darkred"),
+    na.value = "grey50"
+  ) +
+  guides(fill = guide_legend(title.position = "top", title.hjust = 0.5,
+                             override.aes = list(alpha = 0.85, size = 5))) +
+  labs(
+    title    = "Who Does Each Bench Serve? (Aarhus Municipality, Denmark)",
+    subtitle = "Voronoi Diagram - Each region shows the area served by its nearest bench"
+  ) +
+  theme_ppt
+```
+
+
+
+```{r voronoi-interactive}
+mapview(voronoi_labelled, zcol = "category",
+        col.regions = c("Exclusionary" = "red3", "Inclusive" = "forestgreen", "Unknown" = "grey70"),
+        layer.name = "Service area") +
+mapview(inex_benches, zcol = "is_inclusive",
+        col.regions = c("exclusionary" = "darkred", "inclusive" = "darkgreen"),
+        na.color = "grey50",
+        cex = 3, layer.name = "Benches")
+```
+
+
+```{r voronoi-citycenter-osm, fig.width=9, fig.height=7}
+library(ggspatial)
+p_load(prettymapr)
+
+ggplot() +
+  annotation_map_tile(type = "osm", zoom = 15, progress = "none") +
+  geom_sf(data = voronoi_centre, aes(fill = category),
+          colour = "white", linewidth = 0.2, alpha = 0.5) +
+  geom_sf(data = basemap_centre, fill = NA, colour = "grey30", linewidth = 0.5) +
+  geom_sf(data = benches_centre, aes(colour = is_inclusive), size = 1.5, show.legend = FALSE) +
+  scale_fill_manual(
+    values = c("Inclusive" = "forestgreen", "Exclusive" = "red3", "Unknown" = "grey70"),
+    name = "Service area"
+  ) +
+  scale_colour_manual(
+    values = c("inclusive" = "darkgreen", "exclusive" = "darkred"),
+    na.value = "grey50"
+  ) +
+  guides(fill = guide_legend(title.position = "top", title.hjust = 0.5,
+                             override.aes = list(alpha = 0.85, size = 5))) +
+  labs(
+    title    = "Who Does Each Bench Serve? (Aarhus, Denmark - Inner City)",
+    subtitle = "Voronoi Diagram - Each region shows the area served by its nearest bench"
+  ) +
+  theme_ppt
+```
