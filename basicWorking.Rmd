@@ -146,6 +146,25 @@ par(mar = c(0, 0, 0, 0))
 plot(sf::st_geometry(streets))
 plot(sf::st_geometry(benches), col = "red", pch = 20, cex = 0.5, add = TRUE)
 
+# with basemap
+benches_utm <- st_transform_auto(inex_benches)
+
+benches_in <- filter(benches_utm, is_inclusive == 'inclusive')
+benches_ex <- filter(benches_utm, is_inclusive == 'exclusive')
+benches_unknown   <- filter(benches_utm, is.na(is_inclusive))
+
+mapview(baseMap, layer.name = "Base Map") + mapview(benches_ex, cex = 4, col.regions = "orange", alpha = 0.1, layer.name = "Hostile") + mapview(benches_in, cex = 4, col.regions = "lightgreen", alpha = 0.1, layer.name = "Non-Hostile")
+mapview(baseMap, layer.name = "Base Map") + mapview(benches_ex, cex = 4, col.regions = "orange", alpha = 0.1, layer.name = "Exclusive") + mapview(benches_in, cex = 4, col.regions = "lightgreen", alpha = 0.1, layer.name = "Inclusive")
+
+
+# with a few homeless shelters offering sleeping arrangements
+vinterherberg_aarhus <-sf::st_sfc(sf::st_point(c(10.188392854268452,56.201750508688036)), crs = 4326)
+varmestue_herning <-sf::st_sfc(sf::st_point(c(8.969481638917422,56.137404689139295)), crs = 4326)
+spor7_aarhus <-sf::st_sfc(sf::st_point(c(10.18941672755415,56.151407205285174)), crs = 4326)
+treEge_aarhus <-sf::st_sfc(sf::st_point(c(10.086763310082667,56.1546412110082)), crs = 4326)
+omsorgscenter_aarhus <-sf::st_sfc(sf::st_point(c(10.158931423570165,56.11486169632215)), crs = 4326)
+
+
 ```
 
 
