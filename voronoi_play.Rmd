@@ -182,9 +182,11 @@ ggplot() +
     subtitle = "Voronoi Diagram - Each region shows the area served by its nearest bench"
   ) +
   theme_ppt
+```
 
 
 
+```{r voronoi-plot, fig.width=9, fig.height=7}
 ### presentation colours
 voronoi_raw <- inex_benches %>%
   st_geometry() %>%
@@ -199,8 +201,8 @@ voronoi_labelled <- voronoi_raw %>%
   mutate(
     area_m2  = as.numeric(st_area(geometry)),
     category = case_when(
-      is_inclusive == "inclusive" ~ "Hostile",
-      is_inclusive == "exclusive" ~ "Non-Hostile",
+      is_inclusive == "inclusive" ~ "Non-Hostile",
+      is_inclusive == "exclusive" ~ "Hostile",
       TRUE ~ "Unknown"
     )
   )
