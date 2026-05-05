@@ -396,6 +396,65 @@ ggplot() +
 
 ```
 
+```{r}
+benches_in <- filter(benches_utm, is_inclusive == 'inclusive')
+benches_ex <- filter(benches_utm, is_inclusive == 'exclusive')
+
+
+benches_in_gistar <- hotspot_gistar(benches_in, grid = baseMap_grid_utm, bandwidth_adjust = 0.4) %>%  # try with different reductions (%) of the default bandwidth
+  dplyr::filter(gistar > 0, pvalue < 0.05)
+
+benches_ex_gistar <- hotspot_gistar(benches_ex, grid = baseMap_grid_utm, bandwidth_adjust = 0.4) %>%  # try with different reductions (%) of the default bandwidth
+  dplyr::filter(gistar > 0, pvalue < 0.05)
+
+
+
+# hotspots as per cells with significantly more benches than expected per "change"; # some gpt help for plotting two different colour scales
+ggplot() +
+  geom_sf(aes(fill = kde), data = benches_utm, alpha = 0.75, colour = NA) +
+  geom_sf(data = baseMap_utm, colour = "grey20", fill = NA) +
+  scale_fill_distiller(aesthetics = c("colour", "fill"), direction = 1) +
+  labs(title = "Density of Benches in Aarhus Commune", fill = "density of benches (kde)") +
+  theme_void() 
+
+
+
+# hostile vs. non-hostile
+pacman::p_load(ggplot2,
+               ggnewscale)
+
+
+ggplot() +
+  # 1st hotspot
+  geom_sf(data = benches_in_gistar,
+          aes(fill = kde),
+          alpha = 0.75, colour = NA) +
+  scale_fill_distiller(palette = "Greens", direction = 1,
+                       name = "Non-hostile density") +
+
+  new_scale_fill() +
+
+  # 2nd hotspot
+  geom_sf(data = benches_ex_gistar,
+          aes(fill = kde),
+          alpha = 0.75, colour = NA) +
+  scale_fill_distiller(palette = "Oranges", direction = 1,
+                       name = "Hostile density") +
+
+  geom_sf(data = baseMap_utm, colour = "grey20", fill = NA) +
+  labs(title = "Density of Benches in Aarhus Commune") +
+  theme_void() +
+  
+  # shelters
+  geom_sf(data = vinterherberg_aarhus, color = "blue", cex = 1.5) +
+  geom_sf(data = spor7_aarhus, color = "blue", cex = 1.5) +
+  geom_sf(data = treEge_aarhus, color = "blue", cex = 1.5) +
+  geom_sf(data = omsorgscenter_aarhus, color = "blue", cex = 1.5)
+
+```
+
+
+
 
 # OTHER POSSIBLE/POTENTIAL EXTENSIONS OF THE HOT/COLD SPOT ANALYSIS
 - using 'hotspot_dual_kde()' to compare the kernel density of two layers of points;       perhaps to estimate the bench placements relative to local population or something
