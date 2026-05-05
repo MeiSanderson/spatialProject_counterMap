@@ -146,6 +146,8 @@ par(mar = c(0, 0, 0, 0))
 plot(sf::st_geometry(streets))
 plot(sf::st_geometry(benches), col = "red", pch = 20, cex = 0.5, add = TRUE)
 
+mapview(baseMap) + mapview(benches)
+
 ```
 
 
