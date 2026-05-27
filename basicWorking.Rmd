@@ -41,6 +41,15 @@ pacman::p_load(slopes)
 
 ```
 
+```{r load_libraries}
+
+R.Version()
+citation()
+
+RStudio.Version()
+
+```
+
 
 
 ## Data Preparation
@@ -48,6 +57,32 @@ pacman::p_load(slopes)
 Loading, CRS conversion etc.
 
 1)
+```{r, extract the data myself}
+
+## BASEMAP;   inspiration from class scripts
+
+# get municipalities
+pacman::p_load(geodata)
+
+
+ourDownloadedData <- gadm(country="Denmark", level=2, path=getwd(), version="3.6") # getting data from the GADM database
+print(class(ourDownloadedData))
+ourDownloadedData_sf <- st_as_sf(ourDownloadedData)
+print(class(ourDownloadedData_sf))
+
+# ourDownloadedData_sf can be used in the following but then the 'st_as_sf' is not needed
+
+```
+
+```{r, citation stuff}
+#packageVersion("geodata")
+#citation(package="geodata")
+citation(package="osmdata")
+
+#print(ourDownloadedData_sf)
+```
+
+
 ```{r, prepare base map: aarhus commune}
 
 ## BASEMAP;   inspiration from class scripts
@@ -78,7 +113,7 @@ mapview(baseMap)
 ## inspiration from class scripts (specifically, class 06, which is based on luukvdmeer.github.io/UseR2024/notebook.html)
 
 
-# query the stress within our area (i.e., Aarhus commune) from OpenStreetMap
+# query the roads within our area (i.e., Aarhus commune) from OpenStreetMap
 assign("has_internet_via_proxy", TRUE, environment(curl::has_internet)) # telling R that we do in fact have wifi
 
 streets <- osmdata::opq(sf::st_bbox(baseMap)) %>% # generate surrounding box
