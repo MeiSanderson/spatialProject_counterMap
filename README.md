@@ -1,4 +1,4 @@
-# spatialProject_counterMap
+# Spatial Project 2026: Counter Mapping Benches
 
 ## Overview
 ### Project Description
