@@ -733,9 +733,9 @@ meta$variables
 ```
 
 
-```{r, lib}
+```{r}
 
-# ...
+pacman::p_load(attachment)
 attachment::att_from_rmd("basicWorking.Rmd")
 
 ```
