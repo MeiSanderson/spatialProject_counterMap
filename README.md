@@ -31,7 +31,7 @@ txt
 
 
 ## Authors and Contact Details
-Aiswarya Roy (202308450@post.au.dk) and Mie Norre Engemann (202309344@post.au.dk)
+Aiswarya Roy (202308450@post.au.dk) and Mie Norre Engemann (202309344@post.au.dk)  
 Cultural Datascience, Spatial Analytics
 
 
