@@ -41,15 +41,6 @@ pacman::p_load(slopes)
 
 ```
 
-```{r load_libraries}
-
-R.Version()
-citation()
-
-RStudio.Version()
-
-```
-
 
 
 ## Data Preparation
