@@ -15,8 +15,6 @@ INSERT
 
 
 
-
-
 _Script:_
 
 ```{r setup, include=FALSE}
@@ -27,13 +25,20 @@ pacman::p_load(rmdformats, knitr)
 
 options(max.print="75")
 opts_chunk$set(echo=TRUE,
-	             cache=TRUE,
+	             cache=FALSE,
                prompt=FALSE,
                tidy=TRUE,
                comment=NA,
                message=FALSE,
                warning=FALSE)
 opts_knit$set(width=75)
+```
+
+```{r}
+
+knitr::clean_cache()
+chooseBasemap <- "ringvej" # options: ringvej, ringgade, municipality
+
 ```
 
 
@@ -92,9 +97,6 @@ municipalityData_sf <- st_as_sf(municipalityData_downloaded)
 
 ## BASEMAP;   inspiration from class scripts
 
-                                     # get municipalities
-                                     #muns <- readRDS("data/gadm36_DNK_2_sp.rds") %>% st_as_sf()            # from class_ delete
-
 # preparing the data for this project
 municipalityData_sf$NAME_2[31] <- "Aarhus" # from århus to aarhus
 
@@ -102,20 +104,64 @@ municipalityData_sf <- subset(municipalityData_sf, select = -c(GID_1, NL_NAME_1,
 
 
 # filter to only extract Aarhus
-baseMap <- filter(municipalityData_sf, NAME_2 == "Aarhus")
+aarhus_municipality <- filter(municipalityData_sf, NAME_2 == "Aarhus")
 
 
 # save CRS
-baseMap_crs = st_crs(baseMap) # longlat, WGS84
+baseMap_crs = st_crs(aarhus_municipality) # longlat, WGS84
 
 # view
-mapview(baseMap)
+mapview(aarhus_municipality)
 
 
 ```
 
 
+1.1) Ringvejen / Ringgaden
+```{r}
+
+# load the shapefile for noise pollution from streets during the night at 1.5 meters height
+aarhus_ring <- read_sf("data/ringVejGade/ringVejGade.geojson")
+
+aarhus_ringvej <- filter(aarhus_ring, Ringvejen == 1)
+aarhus_ringgade <- filter(aarhus_ring, Ringgaden == 1)
+
+mapview(aarhus_ringvej)
+
+```
+
+
+
+
+
 2) Bench Data
+
+```{r currentMap}
+chooseBasemap <- "ringvej"
+if (chooseBasemap == "ringvej"){
+  baseMap <- aarhus_ringvej
+  
+  benchRemoveCol <- c("artist_name", "artwork_type", "bin", "colour", "direction", "material", "note", "panoramax", "survey.date", "tourism")
+  
+} else if (chooseBasemap == "ringgade"){
+  baseMap <- aarhus_ringgade
+  benchRemoveCol <- c("artist_name", "artwork_type", "bin", "colour", "direction", "material", "note", "panoramax", "survey.date", "tourism")
+  
+} else if(chooseBasemap == "municipality") {
+  baseMap <- aarhus_municipality
+  benchRemoveCol <- c("artist_name", "artwork_type", "bin", "colour", "inscription", "not.inscription", "direction", "lit", "material", "not.tourism.artwork", "note", "panoramax", "source", "survey.date", "tourism", "level")
+} else{
+    stop("Input ringvej, ringgade or municipality for the chooseBasemap variable")
+  }
+
+
+cat("Basemap:", chooseBasemap, "\n")
+print(st_bbox(baseMap))
+print(st_geometry_type(baseMap))
+mapview(baseMap)
+
+```
+
 
 ```{r download_benches_data}
 
@@ -125,9 +171,8 @@ mapview(baseMap)
 # query the roads within our area (i.e., Aarhus commune) from OpenStreetMap
 assign("has_internet_via_proxy", TRUE, environment(curl::has_internet)) # telling R that we do in fact have wifi
 
-
 # query the benches within our area (i.e., Aarhus commune) from OpenStreetMap
-benches <- osmdata::opq(sf::st_bbox(baseMap)) %>% # generate bounding box
+benches_aarhus <- osmdata::opq(sf::st_bbox(baseMap)) %>% # generate bounding box
   osmdata::add_osm_feature(key = "amenity", value = "bench") %>%
   osmdata::osmdata_sf() %>%
   purrr::pluck("osm_points") %>%
@@ -135,39 +180,39 @@ benches <- osmdata::opq(sf::st_bbox(baseMap)) %>% # generate bounding box
 
 
 # save the road data
-saveRDS(benches, "data/benches_osm.rds")
+file.remove("data/benches_osm.rds")
+bench_file <- sprintf("data/benches_osm_%s.rds", chooseBasemap)
+saveRDS(benches_aarhus, bench_file)
+
+
+cat("Benches:", nrow(benches_aarhus), "\n")
+mapview(baseMap) + mapview(benches_aarhus)
+
+
 
 ```
 
+
 ```{r load_in_the_benches_data_if_already_computed}
 
-benches <- readRDS("data/benches_osm.rds")
+benches <- readRDS(bench_file)
 
 ```
 
 
 ```{r removing_columns}
 
-benches <- subset(benches, select = -c(artist_name, artwork_type, bin, colour, inscription, not.inscription, direction, lit, material, not.tourism.artwork, note, panoramax, source, survey.date, tourism, level)) # 'lit', 'material' and other features could be incorporated into the classifications of hostile, non-hostile and sleep-friendly benches but wasn't for the current project
 
+benches <- dplyr::select(benches, -all_of(benchRemoveCol)) # 'lit', 'material' and other features could be incorporated into the classifications of hostile, non-hostile and sleep-friendly benches but wasn't for the current project
+
+mapview(baseMap) + mapview(benches)
 
 ```
 
 
 _NOTE:_ As OpenStreetMap also uses the WGS84 (4326) CRS, there is no need for CRS conversion
 
-```{r help_for_benches1}
 
-
-# delete this
-print(colnames(benches)) # it includes bench data as well as various other details such as the colour, ability to lie down on it, separated seats etc.
-
-print(class(benches))
-print(unique(st_geometry_type(benches)))
-
-print(unique(benches$is_covered))
-
-```
 
 
 ```{r classify_benches} 
@@ -201,11 +246,12 @@ inex_benches <- benches %>%
     ),
     
     # covered (shelter from rain)
-    is_covered = case_when(
-      covered == "yes" ~ TRUE,
-      covered == "no"  ~ FALSE,
-      TRUE             ~ NA
-    ),
+    if(chooseBasemap == "municipality"){
+      is_covered = case_when(
+        covered == "yes" ~ TRUE,
+        covered == "no"  ~ FALSE,
+        TRUE             ~ NA)
+    },
     
     # separated seats (armrests between seats — exclusionary for rough sleeping)
     has_separated_seats = case_when(
@@ -226,7 +272,8 @@ inex_benches <- benches %>%
     # sculptures in the middle, type of seat separator
   
     # --- non-hostile / sleep-friendly ---
-    has_backrest == TRUE & has_armrest == FALSE & is_covered == TRUE     ~ "sleep-friendly_covered",
+    if(chooseBasemap == "municipality"){
+      has_backrest == TRUE & has_armrest == FALSE & is_covered == TRUE     ~ "sleep-friendly_covered"},
     
     lying_down == TRUE                                                   ~ "sleep-friendly", # able to lie down; lack of is_covered is assumed to mean that it isn't covered
     has_backrest == TRUE & has_armrest == FALSE                          ~ "sleep-friendly", # inferred ability to lie down
@@ -237,9 +284,7 @@ inex_benches <- benches %>%
   ))
 
 cat("Inclusivity classification:\n")
-table(inex_benches$is_inclusive, useNA = "always")
-
-
+table(inex_benches$is_inclusive, useNA = "always") # none have is_covered == True
 
 
 ```
@@ -259,7 +304,7 @@ _examples found of homeless shelters in Aarhus (DK: herberger (specifically the 
 
 _potentially relevant sources_
 - information about 'Varmestuer' in DK by Kirkens Korshær: https://kirkenskorshaer.dk/2025/09/varmestuer/
-- 'når menneskesynet vakler: Aarhus svigter de mest udsatte': https://jyllands-posten.dk/jpaarhus/debat/breve/ECE18502465/naar-menneskesynet-vakler-aarhus-svigter-de-mest-udsatte/
+- 'når menneskesynet vakler: Aarhus svigter de mest udsatte': https://jyllands-posten.dk/jpaarhus/debat/breve/ECE18602465/naar-menneskesynet-vakler-aarhus-svigter-de-mest-udsatte/
 
 
 ```{r visual_assessment}
@@ -268,7 +313,6 @@ _potentially relevant sources_
 benches_hos <- filter(inex_benches, is_inclusive == 'hostile')
 benches_nonHos <- filter(inex_benches, is_inclusive == 'non-hostile')
 benches_friend <- filter(inex_benches, is_inclusive == 'sleep-friendly')
-benches_friendCover <- filter(inex_benches, is_inclusive == 'sleep-friendly_covered')
 benches_unknown   <- filter(inex_benches, is.na(is_inclusive))
 
 # plot without NA benches
@@ -280,7 +324,7 @@ mapview(baseMap, layer.name = "Base Map") + mapview(benches_unknown, cex = 3, co
 
 
 # plot with a few homeless shelters offering sleeping arrangements
-vinterherberg_aarhus <-sf::st_sfc(sf::st_point(c(10.188392854268452,56.201750508688036)), crs = 4326)
+vinterherberg_aarhus <-sf::st_sfc(sf::st_point(c(10.188392854268452,56.201760608688036)), crs = 4326)
 spor7_aarhus <-sf::st_sfc(sf::st_point(c(10.18941672755415,56.151407205285174)), crs = 4326)
 treEge_aarhus <-sf::st_sfc(sf::st_point(c(10.086763310082667,56.1546412110082)), crs = 4326)
 omsorgscenter_aarhus <-sf::st_sfc(sf::st_point(c(10.158931423570165,56.11486169632215)), crs = 4326)
@@ -317,8 +361,8 @@ aarhus_night_streetNoise <- st_intersection(raw_streetNoise, baseMap)
 
 
 # save the data as a GeoPackage; help from: https://mapping-in-r-workshop.ryanpeek.org/02_import_export_gpkg
-st_write(aarhus_night_streetNoise, "data/aarhus_night_streetNoise.rds.gpkg")
-
+bench_file <- sprintf("data/aarhus_night_streetNoise_%s.gpkg", chooseBasemap)
+st_write(aarhus_night_streetNoise, bench_file, delete_dsn = TRUE)
 
 ```
 
@@ -326,13 +370,11 @@ _RUN THIS_
 ```{r load_prepared_noise_pollution_data}
 
 # read in the noise pollution data for Aarhus only
-aarhus_night_streetNoise <- st_read("data/aarhus_night_streetNoise.rds.gpkg")
+aarhus_night_streetNoise <- st_read(bench_file)
 
 
 
 ```
-
-
 
 
 
@@ -358,33 +400,46 @@ mapview(
 
 
 
-```{r streetNoise_analysis}
+```{r streetNoise_counts}
 
-# areas with 60 or above db from street noise
-aarhus_night_streetNoise_60 <- filter(aarhus_night_streetNoise, isov1>=60) # areas (i.e., rows) with decibel at 60 or above
+# areas with 50 or above db from street noise
+aarhus_night_streetNoise_50 <- filter(aarhus_night_streetNoise, isov1>=50) # areas (i.e., rows) with decibel at 50 or above
 
-bench_aarhus_night_streetNoise_60 <- st_intersection(inex_benches, aarhus_night_streetNoise_60) # intersection to get the benches with said areas
-
-
-benches_inclusivity_streetNoise_60 <- bench_aarhus_night_streetNoise_60 %>% st_drop_geometry() %>% count(is_inclusive) # count number of rows per is_inclusive category of these benches subjected to 60 or above db
-
-head(benches_inclusivity_streetNoise_60)
+bench_aarhus_night_streetNoise_50 <- st_intersection(inex_benches, aarhus_night_streetNoise_50) # intersection to get the benches with said areas
 
 
-# areas with below 60 db from street noise
-aarhus_night_streetNoise_below60 <- filter(aarhus_night_streetNoise, isov1<60) # areas (i.e., rows) with decibel below 60
+benches_inclusivity_streetNoise_50_count <- bench_aarhus_night_streetNoise_50 %>% st_drop_geometry() %>% count(is_inclusive) # count number of rows per is_inclusive category of these benches subjected to 50 or above db
+benches_inclusivity_streetNoise_50_count <- rename(benches_inclusivity_streetNoise_50_count, count_50 = n)
 
-bench_aarhus_night_streetNoise_below60 <- st_intersection(inex_benches, aarhus_night_streetNoise_below60) # intersection to get the benches with said areas
-
-
-benches_inclusivity_streetNoise_below60 <- bench_aarhus_night_streetNoise_below60 %>% st_drop_geometry() %>% count(is_inclusive)
-
-head(benches_inclusivity_streetNoise_below60)
+head(benches_inclusivity_streetNoise_50_count)
 
 
+# areas with below 50 db from street noise
+aarhus_night_streetNoise_below50 <- filter(aarhus_night_streetNoise, isov1<50) # areas (i.e., rows) with decibel below 50
 
-# proportion of benches pr. bench type (hostile, non-hostile, sleep-friendly) subjected to 60 or above db
+bench_aarhus_night_streetNoise_below50 <- st_intersection(inex_benches, aarhus_night_streetNoise_below50) # intersection to get the benches with said areas
 
+
+benches_inclusivity_streetNoise_below50_count <- bench_aarhus_night_streetNoise_below50 %>% st_drop_geometry() %>% count(is_inclusive)
+benches_inclusivity_streetNoise_below50_count <- rename(benches_inclusivity_streetNoise_below50_count, count_below50 = n)
+
+
+head(benches_inclusivity_streetNoise_below50_count)
+```
+
+```{r streetNoise_proportions}
+# proportion of benches pr. bench type (hostile, non-hostile, sleep-friendly) subjected to 50 or above db
+benches_inclusivity_streetNoise <- merge(benches_inclusivity_streetNoise_50_count, benches_inclusivity_streetNoise_below50_count, by = "is_inclusive") # merge
+
+
+total_counts <- inex_benches %>%  st_drop_geometry() %>% count(is_inclusive, name = "totalBenchCount")
+
+benches_inclusivity_streetNoise <- merge(benches_inclusivity_streetNoise, total_counts, by = "is_inclusive")
+
+benches_inclusivity_streetNoise <- mutate(benches_inclusivity_streetNoise,
+                                          proportion50andAbove = count_50/totalBenchCount)
+
+head(benches_inclusivity_streetNoise)
 
 
 ```
@@ -398,10 +453,325 @@ head(benches_inclusivity_streetNoise_below60)
 
 
 
+for (bench in 1:nrow(inex_benches)){
+  if (inex_benches$osm_id[bench] %in% bench_aarhus_night_streetNoise_50$osm_id & is.na(inex_benches$is_inclusive[bench])==FALSE){
+    inex_benches$is_inclusive[bench] = 'hostile'
+  }
+}
+
+cat("Inclusivity classification w. noise pollution:\n")
+table(inex_benches$is_inclusive, useNA = "always")
+
+
+```
+
+```{r visual_assessment2}
+
+# prepare bench data
+benches_hos <- filter(inex_benches, is_inclusive == 'hostile')
+benches_nonHos <- filter(inex_benches, is_inclusive == 'non-hostile')
+benches_friend <- filter(inex_benches, is_inclusive == 'sleep-friendly')
+benches_friendCover <- filter(inex_benches, is_inclusive == 'sleep-friendly_covered')
+benches_unknown   <- filter(inex_benches, is.na(is_inclusive))
+
+# plot without NA benches
+mapview(baseMap, layer.name = "Base Map") + mapview(benches_hos, cex = 3, col.regions = "orange", alpha = 0.1, layer.name = "Hostile") + mapview(benches_nonHos, cex = 3, col.regions = "#FFF159", alpha = 0.1, layer.name = "Non-Hostile")  + mapview(benches_friend, cex = 3, col.regions = "lightgreen", alpha = 0.1, layer.name = "Sleep-Friendly")
+
+# plot with NA benches
+mapview(baseMap, layer.name = "Base Map") + mapview(benches_unknown, cex = 3, col.regions = "ivory2", alpha = 0.1, layer.name = "NA") + mapview(benches_hos, cex = 3, col.regions = "orange", alpha = 0.1, layer.name = "Hostile") + mapview(benches_nonHos, cex = 3, col.regions = "#FFF159", alpha = 0.1, layer.name = "Non-Hostile")  + mapview(benches_friend, cex = 3, col.regions = "lightgreen", alpha = 0.1, layer.name = "Sleep-Friendly")
+
+
+
+# plot with a few homeless shelters offering sleeping arrangements
+vinterherberg_aarhus <-sf::st_sfc(sf::st_point(c(10.188392854268452,56.201760608688036)), crs = 4326)
+spor7_aarhus <-sf::st_sfc(sf::st_point(c(10.18941672755415,56.151407205285174)), crs = 4326)
+treEge_aarhus <-sf::st_sfc(sf::st_point(c(10.086763310082667,56.1546412110082)), crs = 4326)
+omsorgscenter_aarhus <-sf::st_sfc(sf::st_point(c(10.158931423570165,56.11486169632215)), crs = 4326)
+
+
+mapview(baseMap, layer.name = "Base Map") + mapview(benches_hos, cex = 3, col.regions = "orange", alpha = 0.1, layer.name = "Hostile") + mapview(benches_nonHos, cex = 3, col.regions = "#FFF159", alpha = 0.1, layer.name = "Non-Hostile")  + mapview(benches_friend, cex = 3, col.regions = "lightgreen", alpha = 0.1, layer.name = "Sleep-Friendly") + mapview(vinterherberg_aarhus, col.regions = "blue", cex = 5, layer.name = "HomelessShelter_vinterherberg") + mapview(spor7_aarhus, col.regions = "blue", cex = 5, layer.name = "HomelessShelter_spor7") + mapview(treEge_aarhus, col.regions = "blue", cex = 5, layer.name = "HomelessShelter_treEge") + mapview(omsorgscenter_aarhus, col.regions = "blue", cex = 5, layer.name = "HomelessShelter_omsorgscenter")
+
+
+```
+
+
+
+
+ - - - - -  - - - - -
+
+# Same Analysis as Above but for Aarhus Ringvej
+```{r}
+
+# load the shapefile for noise pollution from streets during the night at 1.5 meters height
+aarhus_ring <- read_sf("data/ringVejGade/ringVejGade.geojson")
+
+aarhus_ringvej <- filter(aarhus_ring, Ringvejen == 1)
+aarhus_ringgade <- filter(aarhus_ring, Ringgaden == 1)
+
+
+# intersect with aarhus municipality base map
+aarhus_ringvej <- st_intersection(aarhus_ringvej, baseMap)
+aarhus_ringgade <- st_intersection(aarhus_ringgade, baseMap)
+
+mapview(aarhus_ringvej)
+
+```
+
+```{r download_benches_data_ring}
+
+## inspiration from class scripts (specifically, class 06, which is based on luukvdmeer.github.io/UseR2024/notebook.html)
+
+
+# query the roads within our area (i.e., Aarhus commune) from OpenStreetMap
+assign("has_internet_via_proxy", TRUE, environment(curl::has_internet)) # telling R that we do in fact have wifi
+
+
+# query the benches within our area (i.e., Aarhus commune) from OpenStreetMap
+benches_ring <- osmdata::opq(sf::st_bbox(aarhus_ringvej)) %>% # generate bounding box
+  osmdata::add_osm_feature(key = "amenity", value = "bench") %>%
+  osmdata::osmdata_sf() %>%
+  purrr::pluck("osm_points") %>%
+  sf::st_intersection(aarhus_ringvej) # fitting to Aarhus municipality
+
+
+# save the road data
+saveRDS(benches_ring, "data/benches_osm_ringvej.rds")
+
+```
+
+```{r load_in_the_benches_data_if_already_computed_ring}
+
+benches_ring <- readRDS("data/benches_osm_ringvej.rds")
+
+mapview(aarhus_ringvej) + mapview(benches_ring)
+
+```
+
+
+
+```{r removing_columns_ring}
+
+
+benches_ring <- subset(benches_ring, select = -c(artist_name, artwork_type, bin, colour, direction, material, note, panoramax, survey.date, tourism))
+
+
+```
+
+```{r classify_benches_ring} 
+
+## CREATED BY AR
+
+# now we create some basis for classifying the benches into hostile, non-hostile and sleep-friendly groups
+
+inex_benches_ring <- benches_ring %>% 
+  dplyr::mutate(
+  
+    # backrest
+    has_backrest = case_when(
+      backrest == "yes" ~ TRUE,
+      backrest == "no"  ~ FALSE,
+      TRUE              ~ NA   # anything else (including NA) stays unknown
+    ),
+    
+    # armrest
+    has_armrest = case_when(
+      armrest == "yes" ~ TRUE,
+      armrest == "no"  ~ FALSE,
+      TRUE             ~ NA
+    ),
+    
+    # can lie down
+    can_lie_down = case_when(
+      lying_down == "yes" ~ TRUE,
+      lying_down == "no"  ~ FALSE,
+      TRUE                ~ NA
+    ),
+
+    
+    # separated seats (armrests between seats — exclusionary for rough sleeping)
+    has_separated_seats = case_when(
+      seats.separated == "yes" ~ TRUE,
+      seats.separated == "no"  ~ FALSE,
+      TRUE                     ~ NA
+    ),
+  
+    
+   # determining the state of a bench!
+    is_inclusive = case_when(
+      
+    # --- exclusionary ---
+    has_separated_seats == TRUE                                          ~ "hostile",
+    has_armrest == TRUE                                                  ~ "hostile",
+    lying_down == FALSE                                                  ~ "hostile",
+    # tilted benches; no tag/attribute
+    # sculptures in the middle, type of seat separator
+  
+    # --- non-hostile / sleep-friendly ---
+    lying_down == TRUE                                                   ~ "sleep-friendly", # able to lie down; lack of is_covered is assumed to mean that it isn't covered
+    has_backrest == TRUE & has_armrest == FALSE                          ~ "sleep-friendly", # inferred ability to lie down
+    
+    has_backrest == FALSE                          ~ "non-hostile", # no backrest, armrest and cover from rain
+  
+    TRUE                                                                 ~ NA_character_
+  ))
+
+cat("Inclusivity classification:\n")
+table(inex_benches_ring$is_inclusive, useNA = "always")
+
 
 
 
 ```
+
+
+
+```{r visual_assessment_ring}
+
+# prepare bench data
+benches_hos_ring <- filter(inex_benches_ring, is_inclusive == 'hostile')
+benches_nonHos_ring <- filter(inex_benches_ring, is_inclusive == 'non-hostile')
+benches_friend_ring <- filter(inex_benches_ring, is_inclusive == 'sleep-friendly')
+benches_friendCover_ring <- filter(inex_benches_ring, is_inclusive == 'sleep-friendly_covered')
+benches_unknown_ring   <- filter(inex_benches_ring, is.na(is_inclusive))
+
+# plot without NA benches
+mapview(aarhus_ringvej, layer.name = "Base Map") + mapview(benches_hos_ring, cex = 3, col.regions = "orange", alpha = 0.1, layer.name = "Hostile") + mapview(benches_nonHos_ring, cex = 3, col.regions = "#FFF159", alpha = 0.1, layer.name = "Non-Hostile")  + mapview(benches_friend_ring, cex = 3, col.regions = "lightgreen", alpha = 0.1, layer.name = "Sleep-Friendly")
+
+# plot with NA benches
+mapview(aarhus_ringvej, layer.name = "Base Map") + mapview(benches_unknown_ring, cex = 3, col.regions = "ivory2", alpha = 0.1, layer.name = "NA") + mapview(benches_hos_ring, cex = 3, col.regions = "orange", alpha = 0.1, layer.name = "Hostile") + mapview(benches_nonHos_ring, cex = 3, col.regions = "#FFF159", alpha = 0.1, layer.name = "Non-Hostile")  + mapview(benches_friend_ring, cex = 3, col.regions = "lightgreen", alpha = 0.1, layer.name = "Sleep-Friendly")
+
+
+```
+
+
+
+```{r noise_pollution_ring}
+# only keep data within Aarhus municipality, ringvej
+aarhus_night_streetNoise_ring <- st_intersection(raw_streetNoise, aarhus_ringvej)
+
+# save the data as a GeoPackage; help from: https://mapping-in-r-workshop.ryanpeek.org/02_import_export_gpkg
+st_write(aarhus_night_streetNoise_ring, "data/aarhus_night_streetNoise_ringvej.rds.gpkg", delete_dsn = TRUE)
+
+
+```
+
+```{r noise_pollution_readData_ring}
+
+# read in the noise pollution data for Aarhus only
+aarhus_night_streetNoise_ring <- st_read("data/aarhus_night_streetNoise_ringvej.rds.gpkg")
+
+
+```
+
+
+```{r streetNoise_counts_ring}
+
+# areas with 50 or above db from street noise
+aarhus_night_streetNoise_50_ring <- filter(aarhus_night_streetNoise_ring, isov1>=50) # areas (i.e., rows) with decibel at 50 or above
+
+bench_aarhus_night_streetNoise_50_ring <- st_intersection(inex_benches_ring, aarhus_night_streetNoise_50_ring) # intersection to get the benches with said areas
+
+
+benches_inclusivity_streetNoise_50_count_ring <- bench_aarhus_night_streetNoise_50_ring %>% st_drop_geometry() %>% count(is_inclusive) # count number of rows per is_inclusive category of these benches subjected to 50 or above db
+benches_inclusivity_streetNoise_50_count_ring <- rename(benches_inclusivity_streetNoise_50_count_ring, count_50 = n)
+
+head(benches_inclusivity_streetNoise_50_count_ring)
+
+
+# areas with below 50 db from street noise
+aarhus_night_streetNoise_below50_ring <- filter(aarhus_night_streetNoise_ring, isov1<50) # areas (i.e., rows) with decibel below 50
+
+bench_aarhus_night_streetNoise_below50_ring <- st_intersection(inex_benches_ring, aarhus_night_streetNoise_below50_ring) # intersection to get the benches with said areas
+
+
+benches_inclusivity_streetNoise_below50_count_ring <- bench_aarhus_night_streetNoise_below50_ring %>% st_drop_geometry() %>% count(is_inclusive)
+benches_inclusivity_streetNoise_below50_count_ring <- rename(benches_inclusivity_streetNoise_below50_count_ring, count_below50 = n)
+
+
+head(benches_inclusivity_streetNoise_below50_count_ring)
+```
+
+```{r streetNoise_proportions_ring}
+# proportion of benches pr. bench type (hostile, non-hostile, sleep-friendly) subjected to 50 or above db
+benches_inclusivity_streetNoise_ring <- merge(benches_inclusivity_streetNoise_50_count_ring, benches_inclusivity_streetNoise_below50_count_ring, by = "is_inclusive") # merge
+
+
+total_counts_ring <- inex_benches_ring %>%  st_drop_geometry() %>% count(is_inclusive, name = "totalBenchCount")
+
+benches_inclusivity_streetNoise_ring <- merge(benches_inclusivity_streetNoise_ring, total_counts_ring, by = "is_inclusive")
+
+benches_inclusivity_streetNoise_ring <- mutate(benches_inclusivity_streetNoise_ring,
+                                          proportion50andAbove = count_50/totalBenchCount)
+
+head(benches_inclusivity_streetNoise_ring)
+
+
+```
+
+
+
+### Reclassify benches as hostile, non-hostile and sleep-friendly (AR's classification code, ME's reclassification use)
+```{r reclassification_of_benches_ring}
+
+
+
+for (bench in 1:nrow(inex_benches_ring)){
+  if (inex_benches_ring$osm_id[bench] %in% bench_aarhus_night_streetNoise_50_ring$osm_id & is.na(inex_benches_ring$is_inclusive[bench])==FALSE){
+    inex_benches_ring$is_inclusive[bench] = 'hostile'
+  }
+}
+
+cat("Inclusivity classification w. noise pollution:\n")
+table(inex_benches_ring$is_inclusive, useNA = "always")
+
+
+```
+```{r}
+benches_hos_ring <- filter(inex_benches_ring, is_inclusive == 'hostile')
+benches_nonHos_ring <- filter(inex_benches_ring, is_inclusive == 'non-hostile')
+benches_friend_ring <- filter(inex_benches_ring, is_inclusive == 'sleep-friendly')
+benches_friendCover_ring <- filter(inex_benches_ring, is_inclusive == 'sleep-friendly_covered')
+benches_unknown_ring   <- filter(inex_benches_ring, is.na(is_inclusive))
+
+# plot without NA benches
+mapview(aarhus_ringvej, layer.name = "Base Map") + mapview(benches_hos_ring, cex = 3, col.regions = "orange", alpha = 0.1, layer.name = "Hostile") + mapview(benches_nonHos_ring, cex = 3, col.regions = "#FFF159", alpha = 0.1, layer.name = "Non-Hostile")  + mapview(benches_friend_ring, cex = 3, col.regions = "lightgreen", alpha = 0.1, layer.name = "Sleep-Friendly")
+
+
+```
+
+```{r}
+
+benches_hos_ring <- filter(inex_benches_ring, is_inclusive == 'hostile')
+benches_nonHos_ring <- filter(inex_benches_ring, is_inclusive == 'non-hostile')
+benches_friend_ring <- filter(inex_benches_ring, is_inclusive == 'sleep-friendly')
+benches_friendCover_ring <- filter(inex_benches_ring, is_inclusive == 'sleep-friendly_covered')
+benches_unknown_ring   <- filter(inex_benches_ring, is.na(is_inclusive))
+
+# plot with NA benches
+mapview(aarhus_ringvej, layer.name = "Base Map") + mapview(benches_unknown_ring, cex = 3, col.regions = "ivory2", alpha = 0.1, layer.name = "NA") + mapview(benches_hos_ring, cex = 3, col.regions = "orange", alpha = 0.1, layer.name = "Hostile") + mapview(benches_nonHos_ring, cex = 3, col.regions = "#FFF159", alpha = 0.1, layer.name = "Non-Hostile")  + mapview(benches_friend_ring, cex = 3, col.regions = "lightgreen", alpha = 0.1, layer.name = "Sleep-Friendly")
+
+```
+
+
+```{r visual_assessment_ring2}
+
+# prepare bench data
+benches_hos_ring <- filter(inex_benches_ring, is_inclusive == 'hostile')
+benches_nonHos_ring <- filter(inex_benches_ring, is_inclusive == 'non-hostile')
+benches_friend_ring <- filter(inex_benches_ring, is_inclusive == 'sleep-friendly')
+benches_friendCover_ring <- filter(inex_benches_ring, is_inclusive == 'sleep-friendly_covered')
+benches_unknown_ring   <- filter(inex_benches_ring, is.na(is_inclusive))
+
+# plot without NA benches
+mapview(aarhus_ringvej, layer.name = "Base Map") + mapview(benches_hos_ring, cex = 3, col.regions = "orange", alpha = 0.1, layer.name = "Hostile") + mapview(benches_nonHos_ring, cex = 3, col.regions = "#FFF159", alpha = 0.1, layer.name = "Non-Hostile")  + mapview(benches_friend_ring, cex = 3, col.regions = "lightgreen", alpha = 0.1, layer.name = "Sleep-Friendly")
+
+# plot with NA benches
+mapview(aarhus_ringvej, layer.name = "Base Map") + mapview(benches_unknown_ring, cex = 3, col.regions = "ivory2", alpha = 0.1, layer.name = "NA") + mapview(benches_hos_ring, cex = 3, col.regions = "orange", alpha = 0.1, layer.name = "Hostile") + mapview(benches_nonHos_ring, cex = 3, col.regions = "#FFF159", alpha = 0.1, layer.name = "Non-Hostile")  + mapview(benches_friend_ring, cex = 3, col.regions = "lightgreen", alpha = 0.1, layer.name = "Sleep-Friendly")
+
+
+```
+
+
 
 
 
@@ -431,7 +801,7 @@ benches_unknown   <- filter(inex_benches, is.na(is_inclusive))
 
 
 study_bbox <- st_bbox(
-  c(xmin = 565000, ymin = 6220000, xmax = 572000, ymax = 6226000),  # <- adjust
+  c(xmin = 566000, ymin = 6220000, xmax = 572000, ymax = 6226000),  # <- adjust
   crs = st_crs(baseMap_utm)
 ) %>% st_as_sfc()
 
@@ -589,7 +959,7 @@ ggplot() +
   scale_fill_manual(values = c("Hostile" = "#ffc05c", "Non-Hostile" = "#FFF159", "Sleep-Friendly" = "lightgreen", "Unknown" = "grey70"),
                     name = "Service area") +
   scale_colour_manual(values = c("hostile" = "#C7701A", "non-hostile" = "yellow3", "sleep-friendly" = "green4"),
-                      na.value = "grey50") +
+                      na.value = "grey60") +
   guides(fill = guide_legend(title.position = "top", title.hjust = 0.5,
                              override.aes = list(alpha = 0.85, size = 5))) +
   labs(
@@ -632,7 +1002,7 @@ mapview(voronoi_labelled, zcol = "category",
   
   mapview(inex_benches, zcol = "is_inclusive",
         col.regions = c("hostile" = "#C7701A", "non-hostile" = "yellow3", "sleep-friendly" = "green4"),
-        na.color = "grey50",
+        na.color = "grey60",
         cex = 3, layer.name = "Benches")
 
 
