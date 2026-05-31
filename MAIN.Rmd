@@ -47,32 +47,17 @@ chooseBasemap <- "ringvej" # options: ringvej, ringgade, municipality
 ```{r load_libraries, message = FALSE, warning=FALSE}
 library(pacman)
 
-pacman::p_load(sfnetworks,
-               sf,
-               tidygraph,
+pacman::p_load(sf,
                tidyverse,
                osmdata,
-               raster,
-               units,
                mapview,
                ggplot2,
                geodata,
                dplyr,
-               sfhotspot,
                geopackage)
 
-# check which ones we actually use
 
-```
 
-```{r citation_stuff_deleteLater}
-#packageVersion("geodata")
-#citation(package="geodata")
-#citation(package="osmdata")
-
-#print(ourDownloadedData)
-
-#print(ourDownloadedData_sf)
 ```
 
 
@@ -155,11 +140,6 @@ if (chooseBasemap == "ringvej"){
   }
 
 
-cat("Basemap:", chooseBasemap, "\n")
-print(st_bbox(baseMap))
-print(st_geometry_type(baseMap))
-mapview(baseMap)
-
 ```
 
 
@@ -183,10 +163,6 @@ benches_aarhus <- osmdata::opq(sf::st_bbox(baseMap)) %>% # generate bounding box
 file.remove("data/benches_osm.rds")
 bench_file <- sprintf("data/benches_osm_%s.rds", chooseBasemap)
 saveRDS(benches_aarhus, bench_file)
-
-
-cat("Benches:", nrow(benches_aarhus), "\n")
-mapview(baseMap) + mapview(benches_aarhus)
 
 
 
@@ -774,18 +750,22 @@ We could use IDs to identify different demographics spread through aarhus - not 
 
 
 
-## HELP for Paper stuff
+## HELP for Paper stuff_to be deleted
 
-```{r}
+```{r data}
 
-pacman::p_load(attachment)
-attachment::att_from_rmd("benchesBASIC.Rmd")
+print(unique(st_geometry_type(raw_streetNoise)))
+
 
 ```
 
-```{r, citation}
+```{r citation}
 
-citation(package="osmdata")
+pacman::p_load(attachment)
+attachment::att_from_rmd("MAIN.Rmd") # packages used
+
+packageVersion("sf")
+citation(package="sf")
 
 ```
 
