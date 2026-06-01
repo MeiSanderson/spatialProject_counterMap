@@ -25,9 +25,11 @@ LICENSE.txt
 ## Usage
 
 Set the chooseBasemap variable in the second code chunk of MAIN.Rmd to select the spatial extent for the analysis:
+
 ´´´R
 chooseBasemap <- "municipality"  # options: "ringvej", "ringgade", "municipality"
 ´´´
+
 This controls which basemap is used throughout — Aarhus municipality as a whole, or the smaller areas bounded by Aarhus ringvej or ringgade respectively.
 
 **TO ADD MORE TEXT ABOUT SHINY> APP HERE**
