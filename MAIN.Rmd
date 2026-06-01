@@ -101,7 +101,7 @@ aarhus_municipality <- filter(municipalityData_sf, NAME_2 == "Aarhus")
 baseMap_crs = st_crs(aarhus_municipality) # longlat, WGS84
 
 # view
-mapview(aarhus_municipality)
+#mapview(aarhus_municipality)
 
 
 ```
@@ -116,8 +116,8 @@ aarhus_ring <- read_sf("data/ringVejGade/ringVejGade.geojson") # custom polygons
 aarhus_ringvej <- filter(aarhus_ring, Ringvejen == 1)
 aarhus_ringgade <- filter(aarhus_ring, Ringgaden == 1)
 
-mapview(aarhus_ringvej)
-mapview(aarhus_ringgade)
+#mapview(aarhus_ringvej)
+#mapview(aarhus_ringgade)
 
 ```
 
@@ -135,7 +135,7 @@ if (chooseBasemap == "ringvej"){
   
 } else if (chooseBasemap == "ringgade"){
   baseMap <- aarhus_ringgade
-  benchRemoveCol <- c("artist_name", "artwork_type", "bin", "colour", "direction", "material", "note", "panoramax", "survey.date", "tourism")
+  benchRemoveCol <- c("artist_name", "artwork_type", "colour", "direction", "material", "panoramax", "survey.date", "tourism")
   
 } else if(chooseBasemap == "municipality") {
   baseMap <- aarhus_municipality
@@ -144,6 +144,7 @@ if (chooseBasemap == "ringvej"){
   
     stop("Input ringvej, ringgade or municipality for the chooseBasemap variable")
   }
+
 
 ```
 
@@ -183,11 +184,11 @@ benches <- readRDS(bench_file)
 benches <- dplyr::select(benches, -all_of(benchRemoveCol)) # 'lit', 'material' and other features could be incorporated into the classifications of hostile, non-hostile and sleep-friendly benches but wasn't for the current project
 
 # initial visualisation of the benches on the basemap
-mapview(baseMap) + mapview(benches)
+#mapview(baseMap) + mapview(benches)
 
 # saving the map
-unclassifiedBench_plot <- mapview(baseMap) + mapview(benches)
-unclassifiedBench_filepath <- sprintf("out/unclassifiedBenches_osm_%s.png", chooseBasemap)
+#unclassifiedBench_plot <- mapview(baseMap) + mapview(benches)
+#unclassifiedBench_filepath <- sprintf("out/unclassifiedBenches_osm_%s.png", chooseBasemap)
 
 ```
 
@@ -252,9 +253,6 @@ inex_benches <- benches %>%
     # sculptures in the middle, type of seat separator; no tag/attribute
   
     # --- non-hostile / sleep-friendly ---
-    if(chooseBasemap == "municipality"){
-      has_backrest == TRUE & has_armrest == FALSE & is_covered == TRUE     ~ "sleep-friendly_covered"},
-    
     lying_down == TRUE                                                   ~ "sleep-friendly", # able to lie down; lack of is_covered is assumed to mean that it isn't covered
     has_backrest == TRUE & has_armrest == FALSE                          ~ "sleep-friendly", # inferred ability to lie down
     
@@ -265,6 +263,12 @@ inex_benches <- benches %>%
 
 cat("Inclusivity classification:\n")
 table(inex_benches$is_inclusive, useNA = "always") # none have is_covered == True
+
+
+# save
+name_file <- sprintf("out/initial_benchClassification_%s.csv", chooseBasemap)
+write.table(inex_benches$is_inclusive, file = name_file,
+            sep = "\t", row.names = F)
 
 
 ```
@@ -278,10 +282,10 @@ benches_friend <- filter(inex_benches, is_inclusive == 'sleep-friendly')
 benches_unknown   <- filter(inex_benches, is.na(is_inclusive))
 
 # plot without NA benches
-mapview(baseMap, layer.name = "Base Map") + mapview(benches_hos, cex = 3, col.regions = "orange", alpha = 0.1, layer.name = "Hostile") + mapview(benches_nonHos, cex = 3, col.regions = "#FFF159", alpha = 0.1, layer.name = "Non-Hostile")  + mapview(benches_friend, cex = 3, col.regions = "lightgreen", alpha = 0.1, layer.name = "Sleep-Friendly")
+#mapview(baseMap, layer.name = "Base Map") + mapview(benches_hos, cex = 3, col.regions = "orange", alpha = 0.1, layer.name = "Hostile") + mapview(benches_nonHos, cex = 3, col.regions = "#FFF159", alpha = 0.1, layer.name = "Non-Hostile")  + mapview(benches_friend, cex = 3, col.regions = "lightgreen", alpha = 0.1, layer.name = "Sleep-Friendly")
 
 # plot with NA benches
-mapview(baseMap, layer.name = "Base Map") + mapview(benches_unknown, cex = 3, col.regions = "ivory2", alpha = 0.1, layer.name = "NA") + mapview(benches_hos, cex = 3, col.regions = "orange", alpha = 0.1, layer.name = "Hostile") + mapview(benches_nonHos, cex = 3, col.regions = "#FFF159", alpha = 0.1, layer.name = "Non-Hostile")  + mapview(benches_friend, cex = 3, col.regions = "lightgreen", alpha = 0.1, layer.name = "Sleep-Friendly")
+#mapview(baseMap, layer.name = "Base Map") + mapview(benches_unknown, cex = 3, col.regions = "ivory2", alpha = 0.1, layer.name = "NA") + mapview(benches_hos, cex = 3, col.regions = "orange", alpha = 0.1, layer.name = "Hostile") + mapview(benches_nonHos, cex = 3, col.regions = "#FFF159", alpha = 0.1, layer.name = "Non-Hostile")  + mapview(benches_friend, cex = 3, col.regions = "lightgreen", alpha = 0.1, layer.name = "Sleep-Friendly")
 
 
 ```
@@ -337,9 +341,7 @@ ggplot(aarhus_night_streetNoise) +
 
 
 # interactive plot
-mapview(
-  aarhus_night_streetNoise,
-  zcol = "noise_band")
+#mapview( aarhus_night_streetNoise,  zcol = "noise_band")
 
 
 ```
@@ -392,6 +394,11 @@ benches_inclusivity_streetNoise <- mutate(benches_inclusivity_streetNoise,
 head(benches_inclusivity_streetNoise)
 
 
+# save
+name_file <- sprintf("out/benchesVSnoisePollution_%s.csv", chooseBasemap)
+write.table(benches_inclusivity_streetNoise, file = name_file,
+            sep = "\t", row.names = F)
+
 ```
 
 -> consider benches falling between / intersecting multiple polygons (noise)
@@ -410,6 +417,11 @@ for (bench in 1:nrow(inex_benches)){
 cat("Inclusivity classification w. noise pollution:\n")
 table(inex_benches$is_inclusive, useNA = "always")
 
+# save
+name_file <- sprintf("out/afterNoise_benchClassification_%s.csv", chooseBasemap)
+write.table(inex_benches$is_inclusive, file = name_file,
+            sep = "\t", row.names = F)
+
 
 ```
 
@@ -423,10 +435,10 @@ benches_friendCover <- filter(inex_benches, is_inclusive == 'sleep-friendly_cove
 benches_unknown   <- filter(inex_benches, is.na(is_inclusive))
 
 # plot without NA benches
-mapview(baseMap, layer.name = "Base Map") + mapview(benches_hos, cex = 3, col.regions = "orange", alpha = 0.1, layer.name = "Hostile") + mapview(benches_nonHos, cex = 3, col.regions = "#FFF159", alpha = 0.1, layer.name = "Non-Hostile")  + mapview(benches_friend, cex = 3, col.regions = "lightgreen", alpha = 0.1, layer.name = "Sleep-Friendly")
+#mapview(baseMap, layer.name = "Base Map") + mapview(benches_hos, cex = 3, col.regions = "orange", alpha = 0.1, layer.name = "Hostile") + mapview(benches_nonHos, cex = 3, col.regions = "#FFF159", alpha = 0.1, layer.name = "Non-Hostile")  + mapview(benches_friend, cex = 3, col.regions = "lightgreen", alpha = 0.1, layer.name = "Sleep-Friendly")
 
 # plot with NA benches
-mapview(baseMap, layer.name = "Base Map") + mapview(benches_unknown, cex = 3, col.regions = "ivory2", alpha = 0.1, layer.name = "NA") + mapview(benches_hos, cex = 3, col.regions = "orange", alpha = 0.1, layer.name = "Hostile") + mapview(benches_nonHos, cex = 3, col.regions = "#FFF159", alpha = 0.1, layer.name = "Non-Hostile")  + mapview(benches_friend, cex = 3, col.regions = "lightgreen", alpha = 0.1, layer.name = "Sleep-Friendly")
+#mapview(baseMap, layer.name = "Base Map") + mapview(benches_unknown, cex = 3, col.regions = "ivory2", alpha = 0.1, layer.name = "NA") + mapview(benches_hos, cex = 3, col.regions = "orange", alpha = 0.1, layer.name = "Hostile") + mapview(benches_nonHos, cex = 3, col.regions = "#FFF159", alpha = 0.1, layer.name = "Non-Hostile")  + mapview(benches_friend, cex = 3, col.regions = "lightgreen", alpha = 0.1, layer.name = "Sleep-Friendly")
 
 
 ```
@@ -640,6 +652,22 @@ voronoi_labelled %>%
     .groups = "drop"
   ) %>%
   print()
+
+# save
+voronoi_summary <- voronoi_labelled %>%
+  st_drop_geometry() %>%
+  group_by(category) %>%
+  summarise(
+    n         = n(),
+    mean_m2   = round(mean(area_m2)),
+    median_m2 = round(median(area_m2)),
+    .groups = "drop"
+  ) %>%
+  print()
+
+name_file <- sprintf("out/voronoi_summary_%s.csv", chooseBasemap)
+write.table(voronoi_summary, file = name_file,
+            sep = "\t", row.names = F)
 
 ```
 

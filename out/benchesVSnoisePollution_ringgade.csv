@@ -1,0 +1,5 @@
+"is_inclusive"	"count_50"	"count_below50"	"totalBenchCount"	"proportion50andAbove"
+"hostile"	115	14	212	0.542452830188679
+"non-hostile"	128	95	342	0.374269005847953
+"sleep-friendly"	47	24	131	0.358778625954198
+NA	302	157	818	0.36919315403423
