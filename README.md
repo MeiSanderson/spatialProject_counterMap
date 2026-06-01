@@ -44,6 +44,6 @@ This work is licensed under a
 
 ## Authors and Contact Details
 Aiswarya Roy (202308450@post.au.dk) and Mie Norre Engemann (202309344@post.au.dk)  
-Cultural Datascience, Spatial Analytics
+Cultural Data Science, Spatial Analytics
 
 
