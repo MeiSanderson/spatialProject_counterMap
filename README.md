@@ -9,13 +9,13 @@ This project investigates the structural and social accessibility of public benc
 data/
   └── gadm/                               # where the Danish municipality data is stored upon its download in MAIN.rmd
   └── ringVejGade/                        # our Aarhus areas based on Ringvejen and Ringgaden
-  └── benches_osm_municipality.rds        # bench data for Aarhus municipality downloaded in MAIN.rmd from OpenStreetMap
-  └── benches_osm_ringgade.rds        # bench data for Aarhus area based on Ringgaden downloaded in MAIN.rmd from OpenStreetMap
-  └── benches_osm_ringvej.rds        # bench data for Aarhus area based on Ringvejen downloaded in MAIN.rmd from OpenStreetMap
-  └── gadm36_DNK_2_sp.rds        # saved version of the Danish municipality data
-  └── aarhus_night_streetNoise_municipality.gpkg    # the road noise pollution data downloaded in Road_Noise_Pollution_Data_Download.RMD and restricted to Aarhus municipality in MAIN.rmd
-  └── aarhus_night_streetNoise_ringgade.gpkg    # the road noise pollution data downloaded in Road_Noise_Pollution_Data_Download.RMD and restricted to Aarhus area based on Ringgaden in MAIN.rmd
-  └── aarhus_night_streetNoise_ringvej.gpkg    # the road noise pollution data downloaded in Road_Noise_Pollution_Data_Download.RMD and restricted to Aarhus area based on Ringvejen in MAIN.rmd
+  └── benches_osm_municipality.rds        # bench data for Aarhus municipality
+  └── benches_osm_ringgade.rds            # bench data for Aarhus area based on Ringgaden
+  └── benches_osm_ringvej.rds             # bench data for Aarhus area based on Ringvejen
+  └── gadm36_DNK_2_sp.rds                 # saved version of the Danish municipality data
+  └── aarhus_night_streetNoise_municipality.gpkg    # the road noise pollution data downloaded and restricted to Aarhus municipality in Road_Noise_Pollution_Data_Download.RMD
+  └── aarhus_night_streetNoise_ringgade.gpkg        # the road noise pollution data downloaded and restricted to Aarhus area based on Ringgaden in MAIN.rmd in Road_Noise_Pollution_Data_Download.RMD
+  └── aarhus_night_streetNoise_ringvej.gpkg         # the road noise pollution data downloaded and restricted to Aarhus area based on Ringvejen in MAIN.rmd in Road_Noise_Pollution_Data_Download.RMD
 
 out/
   └── VIZ.png       # description
