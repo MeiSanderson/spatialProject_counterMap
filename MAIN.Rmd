@@ -52,8 +52,6 @@ chooseBasemap <- "ringvej" # options: ringvej, ringgade, municipality
 
 library(pacman)
 
-remotes::install_github("r-spatial/mapview")
-
 pacman::p_load(sf,
                tidyverse,
                osmdata,
@@ -190,7 +188,6 @@ mapview(baseMap) + mapview(benches)
 # saving the map
 unclassifiedBench_plot <- mapview(baseMap) + mapview(benches)
 unclassifiedBench_filepath <- sprintf("out/unclassifiedBenches_osm_%s.png", chooseBasemap)
-webshot2::mapshot2(unclassifiedBench_plot, file = unclassifiedBench_filepath, url = NULL)
 
 ```
 
@@ -312,8 +309,8 @@ aarhus_night_streetNoise <- st_intersection(raw_streetNoise, baseMap)
 
 
 # save the data as a GeoPackage; help from: https://mapping-in-r-workshop.ryanpeek.org/02_import_export_gpkg
-bench_file <- sprintf("data/aarhus_night_streetNoise_%s.gpkg", chooseBasemap)
-st_write(aarhus_night_streetNoise, bench_file, delete_dsn = TRUE)
+noise_file <- sprintf("data/aarhus_night_streetNoise_%s.gpkg", chooseBasemap)
+st_write(aarhus_night_streetNoise, noise_file, delete_dsn = TRUE)
 
 ```
 
@@ -321,7 +318,7 @@ _RUN THIS_
 ```{r load_prepared_noise_pollution_data}
 
 # read in the noise pollution data for Aarhus only
-aarhus_night_streetNoise <- st_read(bench_file) # data from Miljøstyrelsen, downloaded form the MiljøGIS
+aarhus_night_streetNoise <- st_read(noise_file) # data from Miljøstyrelsen, downloaded form the MiljøGIS
 
 
 
