@@ -163,7 +163,7 @@ benches_aarhus <- osmdata::opq(sf::st_bbox(baseMap)) %>% # generate initial boun
   sf::st_intersection(baseMap) # fitting to the basemap (Aarhus municipality, ringvejen or ringgaden)
 
 
-# save the road data
+# save the bench data
 #########################################file.remove("data/benches_osm.rds")
 bench_file <- sprintf("data/benches_osm_%s.rds", chooseBasemap)
 saveRDS(benches_aarhus, bench_file)
@@ -267,7 +267,7 @@ table(inex_benches$is_inclusive, useNA = "always") # none have is_covered == Tru
 
 # save
 name_file <- sprintf("out/initial_benchClassification_%s.csv", chooseBasemap)
-write.table(inex_benches$is_inclusive, file = name_file,
+write.table(table(inex_benches$is_inclusive, useNA = "always"), file = name_file,
             sep = "\t", row.names = F)
 
 
@@ -419,7 +419,7 @@ table(inex_benches$is_inclusive, useNA = "always")
 
 # save
 name_file <- sprintf("out/afterNoise_benchClassification_%s.csv", chooseBasemap)
-write.table(inex_benches$is_inclusive, file = name_file,
+write.table(table(inex_benches$is_inclusive, useNA = "always"), file = name_file,
             sep = "\t", row.names = F)
 
 
@@ -690,7 +690,6 @@ mapview(voronoi_labelled, zcol = "category",
 
 
 # IDK anymore
-
 
 ```{r, voronoi summary}
 
