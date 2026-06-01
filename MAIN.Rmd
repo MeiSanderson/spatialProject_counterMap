@@ -10,9 +10,13 @@ output:
     toc: true
 ---
 
-_Script Description:_
-INSERT
+_Script Description:_  
+The current script (1) creates basemaps based one Aarhus municipality and Aarhus city (center) based on Aarhus ringvej and Aarhus ringgadde. Next, the script (2) downloads bench data from OpenStreetMap for the chosen basemap and classifies these benches as either hostile, non-hostile or sleep-friendly based on the provided tags from OpenStreetMap. Next, the script (3) uses road noise pollution data from city roads to re-classify the benches as hostile if they are subjected to at least 50 dB Lnight. Lastly, (4) the script creates Voronoi diagrams.
 
+- For more information on the libraries used and the data sources, refer to the paper's appendix.
+- The noise pollution data files are too big for GitHub and as such, only the noise pollution data for each basemap is saved in the data/ folder.
+
+NB! To run the code, know that you cannot run the chunk loading the noise pollution data from Miljøstyrelsens MiljøGIS, due to the reason noted above. AND that the variable *chooseBasemap* is what decides the basemap used for each run of the script.
 
 
 _Script:_
@@ -45,17 +49,19 @@ chooseBasemap <- "ringvej" # options: ringvej, ringgade, municipality
 ## Loading Libraries
 
 ```{r load_libraries, message = FALSE, warning=FALSE}
+
 library(pacman)
+
+remotes::install_github("r-spatial/mapview")
 
 pacman::p_load(sf,
                tidyverse,
                osmdata,
-               mapview,
                ggplot2,
                geodata,
                dplyr,
-               geopackage)
-
+               geopackage,
+               mapview)
 
 
 ```
@@ -71,8 +77,9 @@ Loading Data, CRS conversion etc.
 ## BASEMAP;   inspiration from class scripts
 workingDirectory_path <- getwd()
 
-# get municipalities
-municipalityData_downloaded <- geodata::gadm(country="Denmark", level=2, path=file.path(workingDirectory_path, "data"), version="3.6") # getting data from the GADM database and save to data/gadm/
+# get municipality data
+municipalityData_downloaded <- geodata::gadm(country="Denmark", level=2, path=file.path(workingDirectory_path, "data"), version="3.6") # data from the GADM database and save to data/gadm/
+
 municipalityData_sf <- st_as_sf(municipalityData_downloaded)
 
 
@@ -102,27 +109,27 @@ mapview(aarhus_municipality)
 ```
 
 
-1.1) Ringvejen / Ringgaden
+1.1) Ringvejen / Ringgaden (other option for basemap)
 ```{r}
 
 # load the shapefile for noise pollution from streets during the night at 1.5 meters height
-aarhus_ring <- read_sf("data/ringVejGade/ringVejGade.geojson")
+aarhus_ring <- read_sf("data/ringVejGade/ringVejGade.geojson") # custom polygons from geojson.io powered by Mapbox
 
 aarhus_ringvej <- filter(aarhus_ring, Ringvejen == 1)
 aarhus_ringgade <- filter(aarhus_ring, Ringgaden == 1)
 
 mapview(aarhus_ringvej)
+mapview(aarhus_ringgade)
 
 ```
 
 
 
-
-
 2) Bench Data
-
 ```{r currentMap}
-chooseBasemap <- "ringvej"
+
+# setting the basemap to the chooseBasemap value (ringvej, ringgade or municipality)
+
 if (chooseBasemap == "ringvej"){
   baseMap <- aarhus_ringvej
   
@@ -136,9 +143,9 @@ if (chooseBasemap == "ringvej"){
   baseMap <- aarhus_municipality
   benchRemoveCol <- c("artist_name", "artwork_type", "bin", "colour", "inscription", "not.inscription", "direction", "lit", "material", "not.tourism.artwork", "note", "panoramax", "source", "survey.date", "tourism", "level")
 } else{
+  
     stop("Input ringvej, ringgade or municipality for the chooseBasemap variable")
   }
-
 
 ```
 
@@ -147,23 +154,20 @@ if (chooseBasemap == "ringvej"){
 
 ## inspiration from class scripts (specifically, class 06, which is based on luukvdmeer.github.io/UseR2024/notebook.html)
 
-
-# query the roads within our area (i.e., Aarhus commune) from OpenStreetMap
 assign("has_internet_via_proxy", TRUE, environment(curl::has_internet)) # telling R that we do in fact have wifi
 
-# query the benches within our area (i.e., Aarhus commune) from OpenStreetMap
-benches_aarhus <- osmdata::opq(sf::st_bbox(baseMap)) %>% # generate bounding box
-  osmdata::add_osm_feature(key = "amenity", value = "bench") %>%
+# query the benches within our area (i.e., within the basemap) from OpenStreetMap
+benches_aarhus <- osmdata::opq(sf::st_bbox(baseMap)) %>% # generate initial bounding box
+  osmdata::add_osm_feature(key = "amenity", value = "bench") %>% # define the bench data
   osmdata::osmdata_sf() %>%
   purrr::pluck("osm_points") %>%
-  sf::st_intersection(baseMap) # fitting to Aarhus municipality
+  sf::st_intersection(baseMap) # fitting to the basemap (Aarhus municipality, ringvejen or ringgaden)
 
 
 # save the road data
-file.remove("data/benches_osm.rds")
+#########################################file.remove("data/benches_osm.rds")
 bench_file <- sprintf("data/benches_osm_%s.rds", chooseBasemap)
 saveRDS(benches_aarhus, bench_file)
-
 
 
 ```
@@ -178,24 +182,27 @@ benches <- readRDS(bench_file)
 
 ```{r removing_columns}
 
-
 benches <- dplyr::select(benches, -all_of(benchRemoveCol)) # 'lit', 'material' and other features could be incorporated into the classifications of hostile, non-hostile and sleep-friendly benches but wasn't for the current project
 
+# initial visualisation of the benches on the basemap
 mapview(baseMap) + mapview(benches)
+
+# saving the map
+unclassifiedBench_plot <- mapview(baseMap) + mapview(benches)
+unclassifiedBench_filepath <- sprintf("out/unclassifiedBenches_osm_%s.png", chooseBasemap)
+webshot2::mapshot2(unclassifiedBench_plot, file = unclassifiedBench_filepath, url = NULL)
 
 ```
 
 
-_NOTE:_ As OpenStreetMap also uses the WGS84 (4326) CRS, there is no need for CRS conversion
-
-
+_NOTE:_ As OpenStreetMap also uses the WGS84 (4326) CRS, there is no need for CRS conversion.
 
 
 ```{r classify_benches} 
 
 ## CREATED BY AR
 
-# now we create some basis for classifying the benches into hostile, non-hostile and sleep-friendly groups
+# now we create a basis for classifying the benches into hostile, non-hostile and sleep-friendly groups
 
 inex_benches <- benches %>% 
   dplyr::mutate(
@@ -221,7 +228,7 @@ inex_benches <- benches %>%
       TRUE                ~ NA
     ),
     
-    # covered (shelter from rain)
+    # covered (shelter from rain); few benches have this tag and only outside of ringvejen
     if(chooseBasemap == "municipality"){
       is_covered = case_when(
         covered == "yes" ~ TRUE,
@@ -245,7 +252,7 @@ inex_benches <- benches %>%
     has_armrest == TRUE                                                  ~ "hostile",
     lying_down == FALSE                                                  ~ "hostile",
     # tilted benches; no tag/attribute
-    # sculptures in the middle, type of seat separator
+    # sculptures in the middle, type of seat separator; no tag/attribute
   
     # --- non-hostile / sleep-friendly ---
     if(chooseBasemap == "municipality"){
@@ -265,24 +272,6 @@ table(inex_benches$is_inclusive, useNA = "always") # none have is_covered == Tru
 
 ```
 
-## Visualisation incl. homeless shelters in Aarhus (ME)
-OpenStreetMap does have a value for the amenity key called 'social_facility', which describes facilities providing social services such as group & nursing homes etc. in addition to someless shelters. And idk if we can extract something specific from a value (like social_facility), so we might have to find the data elsewhere or plot it ourselves (assuming that there would only be so mnay homeless shelters).
-
--> i assume we are thinking specifically of places where sleep is possible(?); otherwise there are also various 'væresteder' but i don't think they give beds for the night
-
-_examples found of homeless shelters in Aarhus (DK: herberger (specifically the sleeping arrangements) / varmestue ("a place to go") / hjemløsetilbud)_
-- Aarhus Vinterherberg (specifically for non-Danish homeless people AND only in the winter months) (blaakors.dk/vores-arbejde/noedherberger)
-- Varmestue Herning (in Herning, so only important if examining Aarhus Commune)
-- Spor 7 (Godsbanen; natvarmestue)
-- Kirkens Korshær Herberget Tre Ege
-- Omsorgscenter Pitstop (viby; omsorgscenter for  syge hjemløse og funktionelt hjemløse i Aarhus Kommune) (rodekors.dk/vores-arbejde/socialt-arbejde/hjemloese/omsorgscenter-pitstop?gad_source=1&gad_campaignid=23814314290&gclid=CjwKCAjw5NvPBhAoEiwA_2egfiD_SeISgOoQMtUX1mCNiw08K9-zdqpzBCMfNZgBMhWqXyEHQQ19wxoCEQ4QAvD_BwE)
-
-
-_potentially relevant sources_
-- information about 'Varmestuer' in DK by Kirkens Korshær: https://kirkenskorshaer.dk/2025/09/varmestuer/
-- 'når menneskesynet vakler: Aarhus svigter de mest udsatte': https://jyllands-posten.dk/jpaarhus/debat/breve/ECE18602465/naar-menneskesynet-vakler-aarhus-svigter-de-mest-udsatte/
-
-
 ```{r visual_assessment}
 
 # prepare bench data
@@ -296,17 +285,6 @@ mapview(baseMap, layer.name = "Base Map") + mapview(benches_hos, cex = 3, col.re
 
 # plot with NA benches
 mapview(baseMap, layer.name = "Base Map") + mapview(benches_unknown, cex = 3, col.regions = "ivory2", alpha = 0.1, layer.name = "NA") + mapview(benches_hos, cex = 3, col.regions = "orange", alpha = 0.1, layer.name = "Hostile") + mapview(benches_nonHos, cex = 3, col.regions = "#FFF159", alpha = 0.1, layer.name = "Non-Hostile")  + mapview(benches_friend, cex = 3, col.regions = "lightgreen", alpha = 0.1, layer.name = "Sleep-Friendly")
-
-
-
-# plot with a few homeless shelters offering sleeping arrangements
-vinterherberg_aarhus <-sf::st_sfc(sf::st_point(c(10.188392854268452,56.201760608688036)), crs = 4326)
-spor7_aarhus <-sf::st_sfc(sf::st_point(c(10.18941672755415,56.151407205285174)), crs = 4326)
-treEge_aarhus <-sf::st_sfc(sf::st_point(c(10.086763310082667,56.1546412110082)), crs = 4326)
-omsorgscenter_aarhus <-sf::st_sfc(sf::st_point(c(10.158931423570165,56.11486169632215)), crs = 4326)
-
-
-mapview(baseMap, layer.name = "Base Map") + mapview(benches_hos, cex = 3, col.regions = "orange", alpha = 0.1, layer.name = "Hostile") + mapview(benches_nonHos, cex = 3, col.regions = "#FFF159", alpha = 0.1, layer.name = "Non-Hostile")  + mapview(benches_friend, cex = 3, col.regions = "lightgreen", alpha = 0.1, layer.name = "Sleep-Friendly") + mapview(vinterherberg_aarhus, col.regions = "blue", cex = 5, layer.name = "HomelessShelter_vinterherberg") + mapview(spor7_aarhus, col.regions = "blue", cex = 5, layer.name = "HomelessShelter_spor7") + mapview(treEge_aarhus, col.regions = "blue", cex = 5, layer.name = "HomelessShelter_treEge") + mapview(omsorgscenter_aarhus, col.regions = "blue", cex = 5, layer.name = "HomelessShelter_omsorgscenter")
 
 
 ```
@@ -324,17 +302,13 @@ raw_streetNoise <- st_read("data/noisePollution/dk_2022_vej_nat_1_5m.shp") # dow
 # convert CRS to WGS84 (4326)
 raw_streetNoise <- st_transform(raw_streetNoise, baseMap_crs)
 
-print(st_crs( raw_streetNoise ))
 
-
-# i think these two can be delteed
 raw_streetNoise <- st_make_valid(raw_streetNoise)
 baseMap <- st_make_valid(baseMap)
 
 
-# only keep data within Aarhus municipality
+# only keep data within the basemap (Aarhus municipality, ringvejen or ringgaden)
 aarhus_night_streetNoise <- st_intersection(raw_streetNoise, baseMap)
-
 
 
 # save the data as a GeoPackage; help from: https://mapping-in-r-workshop.ryanpeek.org/02_import_export_gpkg
@@ -347,7 +321,7 @@ _RUN THIS_
 ```{r load_prepared_noise_pollution_data}
 
 # read in the noise pollution data for Aarhus only
-aarhus_night_streetNoise <- st_read(bench_file)
+aarhus_night_streetNoise <- st_read(bench_file) # data from Miljøstyrelsen, downloaded form the MiljøGIS
 
 
 
@@ -362,7 +336,7 @@ aarhus_night_streetNoise <- aarhus_night_streetNoise %>% mutate( noise_band = pa
 # static plot
 ggplot(aarhus_night_streetNoise) +
   geom_sf(aes(fill = factor(isov1))) +
-  labs(fill = "Noise level (dB)")
+  labs(title="Noise Pollution from Road Noise within the Basemap", fill = "Noise level (dB)")
 
 
 # interactive plot
@@ -375,7 +349,7 @@ mapview(
 
 
 
-
+Descriptive statistics for the benches subjected to road noise
 
 ```{r streetNoise_counts}
 
@@ -402,9 +376,11 @@ benches_inclusivity_streetNoise_below50_count <- rename(benches_inclusivity_stre
 
 
 head(benches_inclusivity_streetNoise_below50_count)
+
 ```
 
 ```{r streetNoise_proportions}
+
 # proportion of benches pr. bench type (hostile, non-hostile, sleep-friendly) subjected to 50 or above db
 benches_inclusivity_streetNoise <- merge(benches_inclusivity_streetNoise_50_count, benches_inclusivity_streetNoise_below50_count, by = "is_inclusive") # merge
 
@@ -427,8 +403,6 @@ head(benches_inclusivity_streetNoise)
 
 ### Reclassify benches as hostile, non-hostile and sleep-friendly (AR's classification code, ME's reclassification use)
 ```{r reclassification_of_benches}
-
-
 
 for (bench in 1:nrow(inex_benches)){
   if (inex_benches$osm_id[bench] %in% bench_aarhus_night_streetNoise_50$osm_id & is.na(inex_benches$is_inclusive[bench])==FALSE){
@@ -458,17 +432,6 @@ mapview(baseMap, layer.name = "Base Map") + mapview(benches_hos, cex = 3, col.re
 mapview(baseMap, layer.name = "Base Map") + mapview(benches_unknown, cex = 3, col.regions = "ivory2", alpha = 0.1, layer.name = "NA") + mapview(benches_hos, cex = 3, col.regions = "orange", alpha = 0.1, layer.name = "Hostile") + mapview(benches_nonHos, cex = 3, col.regions = "#FFF159", alpha = 0.1, layer.name = "Non-Hostile")  + mapview(benches_friend, cex = 3, col.regions = "lightgreen", alpha = 0.1, layer.name = "Sleep-Friendly")
 
 
-
-# plot with a few homeless shelters offering sleeping arrangements
-vinterherberg_aarhus <-sf::st_sfc(sf::st_point(c(10.188392854268452,56.201760608688036)), crs = 4326)
-spor7_aarhus <-sf::st_sfc(sf::st_point(c(10.18941672755415,56.151407205285174)), crs = 4326)
-treEge_aarhus <-sf::st_sfc(sf::st_point(c(10.086763310082667,56.1546412110082)), crs = 4326)
-omsorgscenter_aarhus <-sf::st_sfc(sf::st_point(c(10.158931423570165,56.11486169632215)), crs = 4326)
-
-
-mapview(baseMap, layer.name = "Base Map") + mapview(benches_hos, cex = 3, col.regions = "orange", alpha = 0.1, layer.name = "Hostile") + mapview(benches_nonHos, cex = 3, col.regions = "#FFF159", alpha = 0.1, layer.name = "Non-Hostile")  + mapview(benches_friend, cex = 3, col.regions = "lightgreen", alpha = 0.1, layer.name = "Sleep-Friendly") + mapview(vinterherberg_aarhus, col.regions = "blue", cex = 5, layer.name = "HomelessShelter_vinterherberg") + mapview(spor7_aarhus, col.regions = "blue", cex = 5, layer.name = "HomelessShelter_spor7") + mapview(treEge_aarhus, col.regions = "blue", cex = 5, layer.name = "HomelessShelter_treEge") + mapview(omsorgscenter_aarhus, col.regions = "blue", cex = 5, layer.name = "HomelessShelter_omsorgscenter")
-
-
 ```
 
 
@@ -477,16 +440,14 @@ mapview(baseMap, layer.name = "Base Map") + mapview(benches_hos, cex = 3, col.re
  - - - - -  - - - - -  - - - - -  - - - - -  - - - - -  - - - - -  - - - - -  - - - - -  - - - - -  - - - - -  - - - - - 
 
 
-## Voronoi - Service Areas (zoom to study area(s)) (AR)
-
-Need to adjust bbox coordinates for our chosen area - this is incredibly large and uninformative right now.
-Can use mapview(baseMap_utm) to find the (approximately) right values interactively.
+## 4) Voronoi - Service Areas (zoom to study area(s)) (AR)
 
 Essentially, this section is just kind of a proof-of-concept right now!
 
 ```{r, voronoi study area}
 
-inex_benches <- st_transform(inex_benches, 25832) # transform crs to projected crs with meter units; here EPSG: 25832 (UTM 32N), which is used for Europe; before the WGS84 (4326) CRS was used
+# transform crs to projected crs with meter units; here EPSG: 25832 (UTM 32N), which is used for Europe; before the WGS84 (4326) CRS was used
+inex_benches <- st_transform(inex_benches, 25832)
 baseMap_utm <- st_transform( baseMap, crs=25832 )
 
 
@@ -529,7 +490,7 @@ cat(sprintf("Benches in study area: %d total | %d hostile | %d non-hostile | %d 
 # keep only benches with a definite inclusive/exclusionary label
 benches_marked <- dplyr::filter(inex_benches, !is.na(is_inclusive))
 
-# hostile, non-hostile, friendly, friendlycovered
+# hostile, non-hostile, friendly, friendly_covered
 voronoi_raw <- benches_marked %>%
   st_geometry() %>%
   st_union() %>%
@@ -587,8 +548,6 @@ ggplot() +
 
 
 mapview(voronoi_labelled, zcol = "category")
-
-
 
 
 ```
@@ -669,9 +628,6 @@ ggplot() +
 
 mapview(voronoi_labelled, zcol = "category")
 
-
-
-
 ```
 
 
@@ -732,30 +688,12 @@ mapview(voronoi_labelled, zcol = "category",
 An idea for using dkstat data which is a part of the opengov dk intitative: https://github.com/rOpenGov/dkstat 
 We could use IDs to identify different demographics spread through aarhus - not sure if an ID for e.g., 'homeless' or socialt udsatte exists or one for elderly people exists but it might be a nice (maybe) way to get an understanding of how the presence and distribution of benches say something about how we care (or not) about various demographics of people.
 
-```{r, elderly}
-
-#install.packages(
-#  "dkstat",
-#  repos = c(
-#    ropengov = "https://ropengov.r-universe.dev",
-#    getOption("repos")
-#  )
-#)
-
-#meta <- dkstat::dst_meta("", lang = "en") # need to test an ID
-#meta$variables
-
-```
-
-
-
 
 ## HELP for Paper stuff_to be deleted
 
 ```{r data}
 
 print(unique(st_geometry_type(raw_streetNoise)))
-
 
 ```
 
@@ -764,8 +702,8 @@ print(unique(st_geometry_type(raw_streetNoise)))
 pacman::p_load(attachment)
 attachment::att_from_rmd("MAIN.Rmd") # packages used
 
-packageVersion("sf")
-citation(package="sf")
+packageVersion("mapview")
+citation(package="mapview")
+
 
 ```
-
