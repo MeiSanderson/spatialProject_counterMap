@@ -1,5 +1,5 @@
-"is_inclusive"	"count_50"	"count_below50"	"totalBenchCount"	"proportion50andAbove"
-"hostile"	137	18	238	0.57563025210084
-"non-hostile"	136	103	366	0.371584699453552
-"sleep-friendly"	49	27	147	0.333333333333333
-NA	411	194	1040	0.395192307692308
+"is_inclusive";"count_50";"count_below50";"totalBenchCount";"proportion50andAbove"
+"hostile";137;18;238;0,57563025210084
+"non-hostile";136;103;366;0,371584699453552
+"sleep-friendly";49;27;147;0,333333333333333
+NA;411;194;1040;0,395192307692308

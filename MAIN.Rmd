@@ -41,7 +41,7 @@ opts_knit$set(width=75)
 ```{r}
 
 knitr::clean_cache()
-chooseBasemap <- "ringvej" # options: ringvej, ringgade, municipality
+chooseBasemap <- "municipality" # options: ringvej, ringgade, municipality
 
 ```
 
@@ -101,7 +101,7 @@ aarhus_municipality <- filter(municipalityData_sf, NAME_2 == "Aarhus")
 baseMap_crs = st_crs(aarhus_municipality) # longlat, WGS84
 
 # view
-#mapview(aarhus_municipality)
+mapview(aarhus_municipality)
 
 
 ```
@@ -116,8 +116,8 @@ aarhus_ring <- read_sf("data/ringVejGade/ringVejGade.geojson") # custom polygons
 aarhus_ringvej <- filter(aarhus_ring, Ringvejen == 1)
 aarhus_ringgade <- filter(aarhus_ring, Ringgaden == 1)
 
-#mapview(aarhus_ringvej)
-#mapview(aarhus_ringgade)
+mapview(aarhus_ringvej)
+mapview(aarhus_ringgade)
 
 ```
 
@@ -164,7 +164,6 @@ benches_aarhus <- osmdata::opq(sf::st_bbox(baseMap)) %>% # generate initial boun
 
 
 # save the bench data
-#########################################file.remove("data/benches_osm.rds")
 bench_file <- sprintf("data/benches_osm_%s.rds", chooseBasemap)
 saveRDS(benches_aarhus, bench_file)
 
@@ -184,11 +183,8 @@ benches <- readRDS(bench_file)
 benches <- dplyr::select(benches, -all_of(benchRemoveCol)) # 'lit', 'material' and other features could be incorporated into the classifications of hostile, non-hostile and sleep-friendly benches but wasn't for the current project
 
 # initial visualisation of the benches on the basemap
-#mapview(baseMap) + mapview(benches)
+mapview(baseMap) + mapview(benches)
 
-# saving the map
-#unclassifiedBench_plot <- mapview(baseMap) + mapview(benches)
-#unclassifiedBench_filepath <- sprintf("out/unclassifiedBenches_osm_%s.png", chooseBasemap)
 
 ```
 
@@ -267,8 +263,7 @@ table(inex_benches$is_inclusive, useNA = "always") # none have is_covered == Tru
 
 # save
 name_file <- sprintf("out/initial_benchClassification_%s.csv", chooseBasemap)
-write.table(table(inex_benches$is_inclusive, useNA = "always"), file = name_file,
-            sep = "\t", row.names = F)
+write.csv2(as.data.frame(table(inex_benches$is_inclusive, useNA = "always")), file = name_file, row.names = FALSE)
 
 
 ```
@@ -282,10 +277,10 @@ benches_friend <- filter(inex_benches, is_inclusive == 'sleep-friendly')
 benches_unknown   <- filter(inex_benches, is.na(is_inclusive))
 
 # plot without NA benches
-#mapview(baseMap, layer.name = "Base Map") + mapview(benches_hos, cex = 3, col.regions = "orange", alpha = 0.1, layer.name = "Hostile") + mapview(benches_nonHos, cex = 3, col.regions = "#FFF159", alpha = 0.1, layer.name = "Non-Hostile")  + mapview(benches_friend, cex = 3, col.regions = "lightgreen", alpha = 0.1, layer.name = "Sleep-Friendly")
+mapview(baseMap, layer.name = "Base Map") + mapview(benches_hos, cex = 3, col.regions = "orange", alpha = 0.1, layer.name = "Hostile") + mapview(benches_nonHos, cex = 3, col.regions = "#FFF159", alpha = 0.1, layer.name = "Non-Hostile")  + mapview(benches_friend, cex = 3, col.regions = "lightgreen", alpha = 0.1, layer.name = "Sleep-Friendly")
 
 # plot with NA benches
-#mapview(baseMap, layer.name = "Base Map") + mapview(benches_unknown, cex = 3, col.regions = "ivory2", alpha = 0.1, layer.name = "NA") + mapview(benches_hos, cex = 3, col.regions = "orange", alpha = 0.1, layer.name = "Hostile") + mapview(benches_nonHos, cex = 3, col.regions = "#FFF159", alpha = 0.1, layer.name = "Non-Hostile")  + mapview(benches_friend, cex = 3, col.regions = "lightgreen", alpha = 0.1, layer.name = "Sleep-Friendly")
+mapview(baseMap, layer.name = "Base Map") + mapview(benches_unknown, cex = 3, col.regions = "ivory2", alpha = 0.1, layer.name = "NA") + mapview(benches_hos, cex = 3, col.regions = "orange", alpha = 0.1, layer.name = "Hostile") + mapview(benches_nonHos, cex = 3, col.regions = "#FFF159", alpha = 0.1, layer.name = "Non-Hostile")  + mapview(benches_friend, cex = 3, col.regions = "lightgreen", alpha = 0.1, layer.name = "Sleep-Friendly")
 
 
 ```
@@ -293,35 +288,12 @@ benches_unknown   <- filter(inex_benches, is.na(is_inclusive))
 
 3) Noise Pollution Data
 
-_DO NOT RUN THIS_
-```{r prepare_noise_pollution_data}
+_The data itself is handled within the Road_Noise_Pollution_Data_Download.RMD_
 
-# load the shapefile for noise pollution from streets during the night at 1.5 meters height
-raw_streetNoise <- st_read("data/noisePollution/dk_2022_vej_nat_1_5m.shp") # downloaded from Miljøstyrelsen at: https://mst.dk/erhverv/tilskud-miljoeviden-og-data/data-og-databaser/miljoegis-data-om-natur-og-miljoe-paa-webkort/hent-data-udstillet-paa-miljoegis
-
-
-# convert CRS to WGS84 (4326)
-raw_streetNoise <- st_transform(raw_streetNoise, baseMap_crs)
-
-
-raw_streetNoise <- st_make_valid(raw_streetNoise)
-baseMap <- st_make_valid(baseMap)
-
-
-# only keep data within the basemap (Aarhus municipality, ringvejen or ringgaden)
-aarhus_night_streetNoise <- st_intersection(raw_streetNoise, baseMap)
-
-
-# save the data as a GeoPackage; help from: https://mapping-in-r-workshop.ryanpeek.org/02_import_export_gpkg
-noise_file <- sprintf("data/aarhus_night_streetNoise_%s.gpkg", chooseBasemap)
-st_write(aarhus_night_streetNoise, noise_file, delete_dsn = TRUE)
-
-```
-
-_RUN THIS_
 ```{r load_prepared_noise_pollution_data}
 
-# read in the noise pollution data for Aarhus only
+# read in the noise pollution data for current Aarhus basemap
+noise_file <- sprintf("data/aarhus_night_streetNoise_%s.gpkg", chooseBasemap)
 aarhus_night_streetNoise <- st_read(noise_file) # data from Miljøstyrelsen, downloaded form the MiljøGIS
 
 
@@ -341,7 +313,7 @@ ggplot(aarhus_night_streetNoise) +
 
 
 # interactive plot
-#mapview( aarhus_night_streetNoise,  zcol = "noise_band")
+mapview( aarhus_night_streetNoise,  zcol = "noise_band")
 
 
 ```
@@ -396,8 +368,7 @@ head(benches_inclusivity_streetNoise)
 
 # save
 name_file <- sprintf("out/benchesVSnoisePollution_%s.csv", chooseBasemap)
-write.table(benches_inclusivity_streetNoise, file = name_file,
-            sep = "\t", row.names = F)
+write.csv2(benches_inclusivity_streetNoise, file = name_file, row.names = FALSE)
 
 ```
 
@@ -419,8 +390,7 @@ table(inex_benches$is_inclusive, useNA = "always")
 
 # save
 name_file <- sprintf("out/afterNoise_benchClassification_%s.csv", chooseBasemap)
-write.table(table(inex_benches$is_inclusive, useNA = "always"), file = name_file,
-            sep = "\t", row.names = F)
+write.csv2(as.data.frame(table(inex_benches$is_inclusive, useNA = "always")), file = name_file, row.names = FALSE)
 
 
 ```
@@ -435,10 +405,10 @@ benches_friendCover <- filter(inex_benches, is_inclusive == 'sleep-friendly_cove
 benches_unknown   <- filter(inex_benches, is.na(is_inclusive))
 
 # plot without NA benches
-#mapview(baseMap, layer.name = "Base Map") + mapview(benches_hos, cex = 3, col.regions = "orange", alpha = 0.1, layer.name = "Hostile") + mapview(benches_nonHos, cex = 3, col.regions = "#FFF159", alpha = 0.1, layer.name = "Non-Hostile")  + mapview(benches_friend, cex = 3, col.regions = "lightgreen", alpha = 0.1, layer.name = "Sleep-Friendly")
+mapview(baseMap, layer.name = "Base Map") + mapview(benches_hos, cex = 3, col.regions = "orange", alpha = 0.1, layer.name = "Hostile") + mapview(benches_nonHos, cex = 3, col.regions = "#FFF159", alpha = 0.1, layer.name = "Non-Hostile")  + mapview(benches_friend, cex = 3, col.regions = "lightgreen", alpha = 0.1, layer.name = "Sleep-Friendly")
 
 # plot with NA benches
-#mapview(baseMap, layer.name = "Base Map") + mapview(benches_unknown, cex = 3, col.regions = "ivory2", alpha = 0.1, layer.name = "NA") + mapview(benches_hos, cex = 3, col.regions = "orange", alpha = 0.1, layer.name = "Hostile") + mapview(benches_nonHos, cex = 3, col.regions = "#FFF159", alpha = 0.1, layer.name = "Non-Hostile")  + mapview(benches_friend, cex = 3, col.regions = "lightgreen", alpha = 0.1, layer.name = "Sleep-Friendly")
+mapview(baseMap, layer.name = "Base Map") + mapview(benches_unknown, cex = 3, col.regions = "ivory2", alpha = 0.1, layer.name = "NA") + mapview(benches_hos, cex = 3, col.regions = "orange", alpha = 0.1, layer.name = "Hostile") + mapview(benches_nonHos, cex = 3, col.regions = "#FFF159", alpha = 0.1, layer.name = "Non-Hostile")  + mapview(benches_friend, cex = 3, col.regions = "lightgreen", alpha = 0.1, layer.name = "Sleep-Friendly")
 
 
 ```
@@ -666,8 +636,7 @@ voronoi_summary <- voronoi_labelled %>%
   print()
 
 name_file <- sprintf("out/voronoi_summary_%s.csv", chooseBasemap)
-write.table(voronoi_summary, file = name_file,
-            sep = "\t", row.names = F)
+write.csv2(voronoi_summary, file = name_file, row.names = FALSE)
 
 ```
 

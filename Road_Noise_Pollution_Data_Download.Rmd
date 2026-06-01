@@ -1,0 +1,153 @@
+---
+title: "Road_Noise_Pollution_Data_Download"
+course: "Cultural Datascience: Spatial Analytics at AU"
+authors: "Aiswarya Roy & Mie Norre Engemann"
+output:
+  html_document:
+    df_print: paged
+  pdf_document:
+    latex_engine: xelatex
+    toc: true
+---
+
+_Script Description:_  
+The current script was used to download the road noise pollution data for Denmark for city roads during the night (22-07) (i.e., Lnight) at 1.5 meters height from 2022. The noise pollution data for each basemap (aarhus municipality and two based on Aarhus ringvej and Aarhus ringgade) is then saved to the data/ folder. This data is what can be found in the GitHub repository. The original datafile is too big, but can be found via this link to Miljøstyrelsens MiljøGIS (i.e., the Danish Environmental Protection Agency's GIS): https://mst.dk/erhverv/tilskud-miljoeviden-og-data/data-og-databaser/miljoegis-data-om-natur-og-miljoe-paa-webkort/hent-data-udstillet-paa-miljoegis.
+
+
+_Script:_
+
+```{r setup, include=FALSE}
+## Global options
+library(pacman)
+
+pacman::p_load(rmdformats, knitr)
+
+options(max.print="75")
+opts_chunk$set(echo=TRUE,
+	             cache=FALSE,
+               prompt=FALSE,
+               tidy=TRUE,
+               comment=NA,
+               message=FALSE,
+               warning=FALSE)
+opts_knit$set(width=75)
+```
+
+
+## Loading Libraries
+
+```{r load_libraries, message = FALSE, warning=FALSE}
+
+library(pacman)
+
+pacman::p_load(sf,
+               tidyverse,
+               osmdata,
+               ggplot2,
+               geodata,
+               dplyr,
+               geopackage,
+               mapview)
+
+
+```
+
+
+## Data Preparation (ME)
+
+Loading Data, CRS conversion etc.
+
+1) Base Map of Aarhus
+```{r download_municipality_data}
+
+## BASEMAP;   inspiration from class scripts
+workingDirectory_path <- getwd()
+
+# get municipality data
+municipalityData_downloaded <- geodata::gadm(country="Denmark", level=2, path=file.path(workingDirectory_path, "data"), version="3.6") # data from the GADM database and save to data/gadm/
+
+municipalityData_sf <- st_as_sf(municipalityData_downloaded)
+
+
+```
+
+```{r prepare_municipality_base_map}
+
+## BASEMAP;   inspiration from class scripts
+
+# preparing the data for this project
+municipalityData_sf$NAME_2[31] <- "Aarhus" # from århus to aarhus
+
+municipalityData_sf <- subset(municipalityData_sf, select = -c(GID_1, NL_NAME_1, GID_2, VARNAME_2, NL_NAME_2, CC_2)) # removing columns not used
+
+
+# filter to only extract Aarhus
+aarhus_municipality <- filter(municipalityData_sf, NAME_2 == "Aarhus")
+
+
+# save CRS
+baseMap_crs = st_crs(aarhus_municipality) # longlat, WGS84
+
+
+
+```
+
+
+1.1) Ringvejen / Ringgaden (other option for basemap)
+```{r}
+
+# load the shapefile for noise pollution from streets during the night at 1.5 meters height
+aarhus_ring <- read_sf("data/ringVejGade/ringVejGade.geojson") # custom polygons from geojson.io powered by Mapbox
+
+aarhus_ringvej <- filter(aarhus_ring, Ringvejen == 1)
+aarhus_ringgade <- filter(aarhus_ring, Ringgaden == 1)
+
+
+```
+
+
+
+2) Noise Pollution Data
+
+```{r prepare_noise_pollution_data}
+
+# load the shapefile for noise pollution from streets during the night at 1.5 meters height
+raw_streetNoise <- st_read("data/noisePollution/dk_2022_vej_nat_1_5m.shp") # downloaded from Miljøstyrelsen at: https://mst.dk/erhverv/tilskud-miljoeviden-og-data/data-og-databaser/miljoegis-data-om-natur-og-miljoe-paa-webkort/hent-data-udstillet-paa-miljoegis
+
+
+# convert CRS to WGS84 (4326)
+raw_streetNoise <- st_transform(raw_streetNoise, baseMap_crs)
+
+# areas to have as basemaps
+basemapOptions_aarhus <- c("municipality", "ringvej","ringgade")
+
+# ensure st is valid for the oise data
+raw_streetNoise <- st_make_valid(raw_streetNoise)
+
+for (currentBasemap_name in basemapOptions_aarhus){
+  # current basemap
+  if (currentBasemap_name == "municipality"){
+    baseMap <- aarhus_municipality
+  } else if (currentBasemap_name == "ringvej"){
+    baseMap <- aarhus_ringvej
+  } else if (currentBasemap_name == "ringgade"){
+    baseMap <- aarhus_ringgade
+  } else{
+    stop("The 'basemapOptions_aarhus' variable must only consist of: municipality, ringvej and ringgade")
+  }
+  
+  # make st valid
+  baseMap <- st_make_valid(baseMap)
+  
+  # only keep the data within the current basemap (Aarhus municipality, ringvejen or ringgaden)
+  aarhus_night_streetNoise <- st_intersection(raw_streetNoise, baseMap)
+  
+  noise_file <- sprintf("data/aarhus_night_streetNoise_%s.gpkg", currentBasemap_name)
+  st_write(aarhus_night_streetNoise, noise_file, delete_dsn = TRUE)
+  
+}
+
+
+```
+
+
