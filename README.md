@@ -22,8 +22,8 @@ out/
   └── afterNoise_benchClassification_ringgade.csv           # distribution of classified benches (also based on road noise pollution); Aarhus area based on Ringgaden
   └── afterNoise_benchClassification_ringvej.csv            # distribution of classified benches (also based on road noise pollution); Aarhus area based on Ringvejen
   └── benchesVSnoisePollution_municipality.csv              # counts and proportions of benches subjected to above 50 dB Lnight road noise; Aarhus municipality
-  └── benchesVSnoisePollution_ringgade.csv                  # description
-  └── benchesVSnoisePollution_ringvej.csv                   # description
+  └── benchesVSnoisePollution_ringgade.csv                  # counts and proportions of benches subjected to above 50 dB Lnight road noise; Aarhus area based on Ringgaden
+  └── benchesVSnoisePollution_ringvej.csv                   # counts and proportions of benches subjected to above 50 dB Lnight road noise; Aarhus area based on Ringvejen
   └── initial_benchClassification_municipality.csv          # distribution of classified benches (before road noise pollution); Aarhus municipality
   └── initial_benchClassification_ringgade.csv              # distribution of classified benches (before road noise pollution); Aarhus area based on Ringgaden
   └── initial_benchClassification_ringvej.csv               # distribution of classified benches (before road noise pollution); Aarhus area based on Ringvejen
@@ -32,7 +32,7 @@ viz/
   └── VIZ.png       # description **TO ADDRESS**
 
 
-MAIN.Rmd
+MAIN.Rmd                                    # MAIN script
 Road_Noise_Pollution_Data_Download.RMD      # not to be run; originally used for loading the road noise data
 
 README.md
