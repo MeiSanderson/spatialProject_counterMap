@@ -520,7 +520,7 @@ ggplot() +
   guides(fill = guide_legend(title.position = "top", title.hjust = 0.5,
                              override.aes = list(alpha = 0.85, size = 5))) +
   labs(
-    title    = "Who Does Each Bench Serve? (Aarhus Municipality, Denmark)",
+    title    = "Who Does Each Bench Serve? (Aarhus, Denmark)",
     subtitle = "Voronoi Diagram - Each region shows the area served by its nearest bench"
   ) +
   theme_ppt
@@ -599,7 +599,7 @@ ggplot() +
   guides(fill = guide_legend(title.position = "top", title.hjust = 0.5,
                              override.aes = list(alpha = 0.85, size = 5))) +
   labs(
-    title    = "Who Does Each Bench Serve? (Aarhus Municipality, Denmark)",
+    title    = "Who Does Each Bench Serve? (Aarhus, Denmark)",
     subtitle = "Voronoi Diagram - Each region shows the area served by its nearest bench"
   ) +
   theme_ppt
@@ -656,30 +656,6 @@ mapview(voronoi_labelled, zcol = "category",
 
 
 ```
-
-
-# IDK anymore
-
-```{r, voronoi summary}
-
-# IDK what this is trying to do
-
-#cat("=== All benches — service area (m²) ===\n")
-#summary(voronoi_all$area_m2)
-
-#cat("\n=== Inclusive benches only — service area (m²) ===\n")
-#summary(voronoi_in$area_m2)
-
-#ratio <- mean(voronoi_in$area_m2) / mean(voronoi_all$area_m2)
-#cat(sprintf("\nMean service area is %.1fx larger when restricted to inclusive benches.\n", ratio))
-
-```
-
-
-## Demographic Overlay (AR) -> look into this
-
-An idea for using dkstat data which is a part of the opengov dk intitative: https://github.com/rOpenGov/dkstat 
-We could use IDs to identify different demographics spread through aarhus - not sure if an ID for e.g., 'homeless' or socialt udsatte exists or one for elderly people exists but it might be a nice (maybe) way to get an understanding of how the presence and distribution of benches say something about how we care (or not) about various demographics of people.
 
 
 ## HELP for Paper stuff_to be deleted
