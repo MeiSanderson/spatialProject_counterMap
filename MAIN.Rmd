@@ -516,7 +516,7 @@ ggplot() +
   geom_sf(data = benches_marked, aes(colour = is_inclusive), size = 1.2, show.legend = FALSE) +
   scale_fill_manual(values = c("Hostile" = "#ffc05c", "Non-Hostile" = "#FFF159", "Sleep-Friendly" = "lightgreen"),
                     name = "Service area") +
-  scale_colour_manual(values = c("hostile" = "#C7701A", "non-hostile" = "yellow3", "sleep-friendly" = "green4")) +
+  scale_colour_manual(values = c("hostile" = "#C7701A", "non-hostile" = "gold", "sleep-friendly" = "green4")) +
   guides(fill = guide_legend(title.position = "top", title.hjust = 0.5,
                              override.aes = list(alpha = 0.85, size = 5))) +
   labs(
@@ -594,7 +594,7 @@ ggplot() +
   geom_sf(data = benches_marked, aes(colour = is_inclusive), size = 1.2, show.legend = FALSE) +
   scale_fill_manual(values = c("Hostile" = "#ffc05c", "Non-Hostile" = "#FFF159", "Sleep-Friendly" = "lightgreen", "Unknown" = "grey70"),
                     name = "Service area") +
-  scale_colour_manual(values = c("hostile" = "#C7701A", "non-hostile" = "yellow3", "sleep-friendly" = "green4"),
+  scale_colour_manual(values = c("hostile" = "#C7701A", "non-hostile" = "gold", "sleep-friendly" = "green4"),
                       na.value = "grey60") +
   guides(fill = guide_legend(title.position = "top", title.hjust = 0.5,
                              override.aes = list(alpha = 0.85, size = 5))) +
@@ -649,7 +649,7 @@ mapview(voronoi_labelled, zcol = "category",
         layer.name = "Service area") +
   
   mapview(inex_benches, zcol = "is_inclusive",
-        col.regions = c("hostile" = "#C7701A", "non-hostile" = "yellow3", "sleep-friendly" = "green4"),
+        col.regions = c("hostile" = "#C7701A", "non-hostile" = "gold", "sleep-friendly" = "green4"),
         na.color = "grey60",
         cex = 3, layer.name = "Benches")
 
