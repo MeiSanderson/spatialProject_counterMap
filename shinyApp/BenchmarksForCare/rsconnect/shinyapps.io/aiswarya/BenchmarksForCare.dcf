@@ -1,0 +1,12 @@
+name: BenchmarksForCare
+title: BenchmarksForCare
+username: aiswarya
+account: aiswarya
+server: shinyapps.io
+hostUrl: https://api.shinyapps.io/v1
+appId: 17302681
+bundleId: 12073483
+url: https://aiswarya.shinyapps.io/BenchmarksForCare/
+version: 1
+asMultiple: FALSE
+asStatic: FALSE
