@@ -2,7 +2,7 @@
 
 ## Overview
 ### Project Description
-This project investigates the structural and social accessibility of public benches in Aarhus municipality, Denmark, through the lens of hostile architecture and counter-mapping. Using bench data from OpenStreetMap and road traffic noise data from Miljøstyrelsen, benches are classified as hostile, non-hostile, or sleep-friendly on the basis of their design features and acoustic environment — with particular attention to their accessibility for people experiencing rough sleeping. A counter map hosted on our ShinyApp is proposed as a proof-of-concept for making visible the spatial realities that conventional cartographic data leaves unrecorded. The project is developed as part of the Spatial Analytics course within the bachelor-level elective Cultural Data Science at Aarhus University.
+This project investigates the structural and social accessibility of public benches in Aarhus municipality, Denmark, through the lens of hostile architecture and counter-mapping. Using bench data from OpenStreetMap and road traffic noise data from Miljøstyrelsen, benches are classified as hostile, non-hostile, or sleep-friendly on the basis of their design features and acoustic environment — with particular attention to their accessibility for people experiencing rough sleeping. A counter-map hosted on our ShinyApp is proposed as a proof-of-concept for making visible the spatial realities that conventional cartographic data leaves unrecorded. The project is developed as part of the Spatial Analytics course within the bachelor-level elective Cultural Data Science at Aarhus University.
 
 ### Repository Structure
 ```
@@ -34,7 +34,7 @@ shinyApp/
 
 MAIN.Rmd                                    # MAIN script
 Road_Noise_Pollution_Data_Download.RMD      # not to be run; originally used for loading the road noise data
-app_data.rds                                # not to be run; data serialisation, i.e., saved R object for the ShinyApp
+app_data.rds                                # not to be run; data serialisation, i.e., saved R object for the ShinyApp data
 
 README.md
 LICENSE.txt
@@ -51,7 +51,7 @@ chooseBasemap <- "municipality"  # options: "ringvej", "ringgade", "municipality
 
 This controls which basemap is used throughout — Aarhus municipality as a whole, or the smaller areas bounded by Aarhus ringvej or ringgade respectively.
 
-**TO ADD MORE TEXT ABOUT SHINY> APP HERE**
+The ShinyApp (our counter-map) can be accessed via the following link, where Shiny-io is used to deploy our ShinyApp without needing to establish a new server: https://aiswarya.shinyapps.io/BenchmarksForCare/. Otherwise, running the ShinyApp requires running multiple files, within the BenchmarksForCare/ folder: (1) run data_pipeline.R, which loads and prepares all the data for the Shiny App (incl. classifications and voronoi diagrams). This is then saved to the app_data.rds file. (2) run app.R, which sets up the app and runs the application with the specified user interface.
 
 ### Data Preparation
 Most data is downloaded or generated automatically on first run. However, note the following:
