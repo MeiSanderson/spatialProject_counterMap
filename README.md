@@ -4,7 +4,7 @@
 ### Project Description
 This project investigates the structural and social accessibility of public benches in Aarhus municipality, Denmark, through the lens of hostile architecture and counter-mapping. Using bench data from OpenStreetMap and road traffic noise data from Miljøstyrelsen, benches are classified as hostile, non-hostile, or sleep-friendly on the basis of their design features and acoustic environment — with particular attention to their accessibility for people experiencing rough sleeping. A counter map hosted on our ShinyApp is proposed as a proof-of-concept for making visible the spatial realities that conventional cartographic data leaves unrecorded. The project is developed as part of the Spatial Analytics course within the bachelor-level elective Cultural Data Science at Aarhus University.
 
-### Repository Structure [idk, just proposal]
+### Repository Structure
 ```
 data/
   └── gadm/                               # where the Danish municipality data is stored upon its download in MAIN.rmd
