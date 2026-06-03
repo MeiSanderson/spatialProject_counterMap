@@ -31,9 +31,9 @@ out/
 shinyApp/               # folder used to run the ShinyApp
   └── data/                 # copy of data/ in root, used for running the data_pipeline.r
   └── rsconnect/
-  └── app.r                 # folder used to run the ShinyApp
-  └── app_data.rds          # not to be run; data serialisation, i.e., saved R object for the ShinyApp data
-  └── data_pipeline.r       # folder used to prepare app_data.rds for the ShinyApp
+  └── app.r                 # file used to run the ShinyApp
+  └── app_data.rds          # data serialisation, i.e., saved R object for the ShinyApp data
+  └── data_pipeline.r       # file used to prepare app_data.rds for the ShinyApp
 
 
 MAIN.Rmd                                    # MAIN script
