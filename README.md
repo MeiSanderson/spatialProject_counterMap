@@ -1,4 +1,4 @@
-# Spatial Project 2026: Benchmarks for Care - Counter-Mapping Benches in Aarhus, Denmark
+# Spatial Project 2026: BENCH-marks For Care - Counter-Mapping Benches in Aarhus, Denmark
 
 ## Overview
 ### Project Description
