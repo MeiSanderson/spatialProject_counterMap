@@ -28,13 +28,17 @@ out/
   └── initial_benchClassification_ringgade.csv              # distribution of classified benches (before road noise pollution); Aarhus area based on Ringgaden
   └── initial_benchClassification_ringvej.csv               # distribution of classified benches (before road noise pollution); Aarhus area based on Ringvejen
 
-shinyApp/
-  └── BenchmarksForCare/       # folder used to run the ShinyApp
+shinyApp/                    # folder used to run the ShinyApp
+  └── BenchmarksForCare/
+  └── data/
+  └── rsconnect/
+  └── app.r                 # folder used to run the ShinyApp
+  └── app_data.rds          # not to be run; data serialisation, i.e., saved R object for the ShinyApp data
+  └── data_pipeline.r       # folder used to prepare the data for the ShinyApp
 
 
 MAIN.Rmd                                    # MAIN script
 Road_Noise_Pollution_Data_Download.RMD      # not to be run; originally used for loading the road noise data
-app_data.rds                                # not to be run; data serialisation, i.e., saved R object for the ShinyApp data
 
 README.md
 LICENSE.txt
