@@ -7,7 +7,7 @@
 #    baseMap_utm                     — same, UTM 32N
 #    aarhus_ringvej                  — ringvej polygon (WGS84)
 #    aarhus_ringgade                 — ringgade polygon (WGS84)
-#    benches_classified              — classified bench points (UTM 32N)
+#    benches_classified              — classified bench points (WGS84)
 #    voronoi_labelled                — Voronoi polygons with category (UTM 32N)
 #    bench_aarhus_night_streetNoise_50 — benches in ≥50 dB zones (UTM 32N)
 # ============================================================
@@ -28,13 +28,13 @@ if (file.exists("data/gadm36_DNK_2_sp.rds")) {
 
 muns$NAME_2[31] <- "Aarhus"
 baseMap <- dplyr::filter(muns, NAME_2 == "Aarhus")
-aarhus_municipality <- baseMap  # alias used by Shiny app basemap selector
+aarhus_municipality <- baseMap
 
 # ------------------------------------------------------------
-# 2. Ringvej / Ringgade polygons (custom, from geojson.io)
+# 2. Ringvej / Ringgade polygons
 # ------------------------------------------------------------
 
-aarhus_ring    <- sf::read_sf("data/ringVejGade/ringVejGade.geojson")
+aarhus_ring     <- sf::read_sf("data/ringVejGade/ringVejGade.geojson")
 aarhus_ringvej  <- dplyr::filter(aarhus_ring, Ringvejen == 1)
 aarhus_ringgade <- dplyr::filter(aarhus_ring, Ringgaden == 1)
 
@@ -58,91 +58,103 @@ if (file.exists(bench_cache)) {
 
 # ------------------------------------------------------------
 # 4. Classify benches
+#    Logic mirrors MAIN.Rmd exactly:
+#      hostile       — separated seats, armrest, or lying_down == no
+#      sleep_friendly — can lie down, OR has backrest & no armrest
+#      non_hostile   — no backrest (and not hostile)
+#      NA            — insufficient tags to classify
 # ------------------------------------------------------------
 
 benches_classified <- benches %>%
   dplyr::mutate(
     
-    has_backrest = case_when(
+    has_backrest = dplyr::case_when(
       backrest == "yes" ~ TRUE,
       backrest == "no"  ~ FALSE,
       TRUE              ~ NA
     ),
     
-    has_armrest = case_when(
+    has_armrest = dplyr::case_when(
       armrest == "yes" ~ TRUE,
       armrest == "no"  ~ FALSE,
       TRUE             ~ NA
     ),
     
-    can_lie_down = case_when(
+    can_lie_down = dplyr::case_when(
       lying_down == "yes" ~ TRUE,
       lying_down == "no"  ~ FALSE,
       TRUE                ~ NA
     ),
     
-    is_covered = case_when(
-      covered == "yes" ~ TRUE,
-      covered == "no"  ~ FALSE,
-      TRUE             ~ NA
-    ),
-    
-    has_separated_seats = case_when(
+    has_separated_seats = dplyr::case_when(
       seats.separated == "yes" ~ TRUE,
       seats.separated == "no"  ~ FALSE,
       TRUE                     ~ NA
     ),
     
-    is_hostile = case_when(
+    is_hostile = dplyr::case_when(
       # --- hostile ---
-      has_separated_seats == TRUE                                          ~ "hostile",
-      has_armrest         == TRUE                                          ~ "hostile",
-      can_lie_down        == FALSE                                         ~ "hostile",
-      # --- non-hostile (with cover) ---
-      can_lie_down == TRUE  & is_covered == TRUE                           ~ "non_hostile_covered",
-      has_backrest == TRUE  & has_armrest == FALSE & is_covered == TRUE    ~ "non_hostile_covered",
+      has_separated_seats == TRUE                                    ~ "hostile",
+      has_armrest         == TRUE                                    ~ "hostile",
+      can_lie_down        == FALSE                                   ~ "hostile",
+      # --- sleep-friendly ---
+      can_lie_down == TRUE                                           ~ "sleep_friendly",
+      has_backrest == TRUE & (is.na(has_armrest) | has_armrest == FALSE) ~ "sleep_friendly",
       # --- non-hostile ---
-      can_lie_down == TRUE                                                 ~ "non_hostile",
-      has_backrest == TRUE  & has_armrest == FALSE                         ~ "non_hostile",
-      has_backrest == FALSE & has_armrest == FALSE & has_separated_seats == FALSE ~ "non_hostile",
-      TRUE                                                                 ~ NA_character_
+      has_backrest == FALSE                                          ~ "non_hostile",
+      TRUE                                                           ~ NA_character_
     )
-  )
+)
 
-cat("Hostility classification:\n")
+cat("Hostility classification (pre-noise):\n")
 print(table(benches_classified$is_hostile, useNA = "always"))
 
 # ------------------------------------------------------------
-# 5. Reproject to UTM 32N (for Voronoi only)
-#    benches_classified stays in WGS84 so the app can intersect
-#    it directly with aarhus_municipality / ringvej / ringgade
+# 5. Reproject to UTM 32N for spatial operations
 # ------------------------------------------------------------
 
-baseMap_utm   <- sf::st_transform(baseMap, 25832)
-benches_utm   <- sf::st_transform(benches_classified, 25832)  # Voronoi only
+baseMap_utm <- sf::st_transform(baseMap, 25832)
+benches_utm <- sf::st_transform(benches_classified, 25832)
 
 # ------------------------------------------------------------
-# 6. Noise pollution reclassification data
-#    (pre-intersected; loaded from cached .gpkg files)
-#    Noise data is in UTM 32N — intersect with benches_utm
+# 6. Noise pollution — reclassify sleep_friendly/non_hostile
+#    benches in >=50 dB zones as hostile
 # ------------------------------------------------------------
 
 noise_file <- "data/aarhus_night_streetNoise_municipality.gpkg"
 
 if (file.exists(noise_file)) {
-  aarhus_night_streetNoise    <- sf::st_read(noise_file, quiet = TRUE)
-  aarhus_night_streetNoise_50 <- dplyr::filter(aarhus_night_streetNoise, isov1 >= 50)
+  aarhus_night_streetNoise      <- sf::st_read(noise_file, quiet = TRUE)
+  aarhus_night_streetNoise_50   <- dplyr::filter(aarhus_night_streetNoise, isov1 >= 50)
   bench_aarhus_night_streetNoise_50 <- sf::st_intersection(
     benches_utm,
     sf::st_transform(aarhus_night_streetNoise_50, sf::st_crs(benches_utm))
   )
+  
+  # reclassify: any classified bench in a >=50 dB zone becomes hostile
+  noise_ids <- bench_aarhus_night_streetNoise_50$osm_id
+  benches_utm <- benches_utm %>%
+    dplyr::mutate(is_hostile = dplyr::case_when(
+      osm_id %in% noise_ids & !is.na(is_hostile) ~ "hostile",
+      TRUE ~ is_hostile
+    ))
+  # keep benches_classified (WGS84) in sync
+  benches_classified <- benches_classified %>%
+    dplyr::mutate(is_hostile = dplyr::case_when(
+      osm_id %in% noise_ids & !is.na(is_hostile) ~ "hostile",
+      TRUE ~ is_hostile
+    ))
+  
 } else {
   warning("Noise pollution data not found — noise reclassification will be unavailable.")
-  bench_aarhus_night_streetNoise_50 <- benches_utm[0, ]  # empty sf, correct schema
+  bench_aarhus_night_streetNoise_50 <- benches_utm[0, ]
 }
 
+cat("Hostility classification (post-noise):\n")
+print(table(benches_classified$is_hostile, useNA = "always"))
+
 # ------------------------------------------------------------
-# 7. Voronoi service areas (uses UTM for area calculations)
+# 7. Voronoi service areas
 # ------------------------------------------------------------
 
 voronoi_raw <- benches_utm %>%
@@ -158,23 +170,24 @@ voronoi_labelled <- voronoi_raw %>%
   dplyr::mutate(
     area_m2  = as.numeric(sf::st_area(geometry)),
     category = dplyr::case_when(
-      is_hostile == "non_hostile_covered" ~ "Non-Hostile",
-      is_hostile == "non_hostile"         ~ "Non-Hostile",
-      is_hostile == "hostile"             ~ "Hostile",
-      TRUE                                ~ "Unknown"
+      is_hostile == "hostile"       ~ "Hostile",
+      is_hostile == "sleep_friendly" ~ "Sleep-Friendly",
+      is_hostile == "non_hostile"   ~ "Non-Hostile",
+      TRUE                          ~ "Unknown"
     )
   )
 
 cat(sprintf(
-  "Voronoi: %d total | %d Hostile | %d Non-Hostile | %d Unknown\n",
+  "Voronoi: %d total | %d Hostile | %d Sleep-Friendly | %d Non-Hostile | %d Unknown\n",
   nrow(voronoi_labelled),
   sum(voronoi_labelled$category == "Hostile"),
+  sum(voronoi_labelled$category == "Sleep-Friendly"),
   sum(voronoi_labelled$category == "Non-Hostile"),
   sum(voronoi_labelled$category == "Unknown")
 ))
 
 # ------------------------------------------------------------
-# 8. Save all objects for fast app startup
+# 8. Save
 # ------------------------------------------------------------
 
 saveRDS(list(
@@ -189,4 +202,3 @@ saveRDS(list(
 ), "app_data.rds")
 
 cat("app_data.rds saved.\n")
-

@@ -5,37 +5,18 @@
 # BENCH-marks For Care — Shiny App
 # Aarhus University | Cultural Data Science: Spatial Analytics
 # Authors: Aiswarya Roy & Mie Norre Engemann
-# GitHub:    aiswary-a      MeiSanderson
+# GitHub:   aiswary-a        MeiSanderson
 #
 # ============================================================
-#
-# Assumes these objects are produced by data_pipeline.R:
-#   benches_classified                : sf with is_hostile col
-#   voronoi_labelled                  : sf with category + area_m2 (UTM 32N)
-#   baseMap_utm                       : sf boundary polygon (UTM 32N)
-#   aarhus_ringvej                    : sf polygon (WGS84)
-#   aarhus_ringgade                   : sf polygon (WGS84)
-#   aarhus_municipality               : sf polygon (WGS84)
-#   bench_aarhus_night_streetNoise_50 : sf — benches in ≥50 dB zones
-#
-# ============================================================
-
-# tryCatch(
-#   source("data_pipeline.R"),
-#   error = function(e) stop("data_pipeline.R failed to load: ", conditionMessage(e))
-# )
 
 app_data <- readRDS("app_data.rds")
 list2env(app_data, envir = .GlobalEnv)
 
 library(pacman)
-pacman::p_load(
-  shiny, leaflet, leaflet.extras, sf,
-  tidyverse, ggplot2, plotly
-)
+pacman::p_load(shiny, leaflet, leaflet.extras, sf, tidyverse, ggplot2, plotly)
 
 
-# ── Colour palette (catalogue-inspired) ──────────────────────
+# ── Colour palette ───────────────────────────────────────────
 
 NAVY         <- "#0d1b2a"
 NAVY_MID     <- "#132336"
@@ -44,24 +25,23 @@ ORANGE       <- "#e8651a"
 ORANGE_LIGHT <- "#f59c5a"
 WHITE        <- "#ffffff"
 
-# bench point colours
 BENCH_COLS <- c(
-  hostile             = "#e8651a",   # orange
-  non_hostile         = "#ffc425",   # yellow
-  non_hostile_covered = "#52c48a"    # green
+  hostile       = "#e8651a",
+  sleep_friendly = "#52c48a",
+  non_hostile   = "#ffc425"
 )
 
-# voronoi fill colours (slightly muted)
 VORONOI_COLS <- c(
-  "Hostile"     = "#e8651a",
-  "Non-Hostile" = "#ffc425",
-  "Unknown"     = "#3a4a5a"
+  "Hostile"       = "#e8651a",
+  "Sleep-Friendly" = "#52c48a",
+  "Non-Hostile"   = "#ffc425",
+  "Unknown"       = "#3a4a5a"
 )
 
 SUBMISSIONS_CSV <- "pending_submissions.csv"
 
 
-# ── Language strings ──────────────────────────────────────────
+# ── Language strings ─────────────────────────────────────────
 
 i18n <- list(
   en = list(
@@ -69,17 +49,18 @@ i18n <- list(
     app_sub        = "Mapping bench accessibility in Aarhus",
     nav_home       = "Home",
     nav_about      = "About",
+    nav_roughsleep = "Rough Sleepers",
     nav_resources  = "Further Reading",
     nav_feedback   = "Feedback",
     lang_toggle    = "DA",
     sec_basemap    = "Basemap",
     sec_layers     = "Layers",
     sec_noise      = "Noise Reclassification",
-    noise_label    = "Reclassify benches as hostile if exposed to ≥50 dB (night)",
+    noise_label    = "Reclassify benches as hostile if exposed to \u226550 dB (night)",
     lyr_voronoi    = "Voronoi service areas",
     lyr_hostile    = "Hostile benches",
+    lyr_sleepfriendly = "Sleep-friendly benches",
     lyr_nonhostile = "Non-hostile benches",
-    lyr_friendly   = "Non-hostile (covered) benches",
     lyr_unknown    = "Unclassified benches",
     lyr_submissions= "Pending submissions",
     sec_contribute = "Contribute",
@@ -87,7 +68,7 @@ i18n <- list(
     btn_add        = "+ Add a bench",
     sec_stats      = "Summary Statistics",
     sec_graph      = "Homelessness in Aarhus",
-    graph_note     = "Minimum estimates from VIVE biennial mapping reports (2009–2024).",
+    graph_note     = "Minimum estimates from VIVE biennial mapping reports (2009\u20132024).",
     bor_title      = "Homeless Bill of Rights",
     bor_attr       = "Source: Housing Rights Watch",
     card_title     = "Further Reading",
@@ -106,63 +87,71 @@ i18n <- list(
     modal_hint     = "Your submission appears on the map immediately and will be reviewed before being merged into the main dataset.",
     modal_cancel   = "Cancel",
     modal_submit   = "Submit for review",
-    notif_thanks   = "Bench submitted — thank you!",
+    notif_thanks   = "Bench submitted \u2014 thank you!",
     pending_label  = "bench(es) pending review",
-    overview_pre   = "Public benches are rarely just benches. In Aarhus, as across Denmark, the design and placement of urban seating reflects decisions — often unspoken — about who is welcome in public space and who is not. This counter-map visualises the structural accessibility of benches for people experiencing rough sleeping, drawing on OpenStreetMap data and road traffic noise measurements to classify each bench as",
-    overview_post  = "or"
+    overview_pre   = "Public benches are rarely just benches. In Aarhus, as across Denmark, the design and placement of urban seating reflects decisions \u2014 often unspoken \u2014 about who is welcome in public space and who is not. This counter-map visualises the structural accessibility of benches for people experiencing rough sleeping, drawing on OpenStreetMap data and road traffic noise measurements to classify each bench as",
+    overview_post  = "or",
+    roughsleep_title = "Rough Sleepers",
+    roughsleep_body1 = "The term 'rough sleepers' describes a sub-category of homelessness, where individuals sleep on the street instead of, e.g., sofa-jumping or staying in a shelter. However, finding places to sleep in public spaces can prove a challenge due to urban design excluding the needs of certain groups of people.",
+    roughsleep_body2 = "This website focuses on how the benches in public spaces, specifically within Aarhus municipality, are, at times, designed in ways that deter and physically hinder the socially-vulnerable (like rough sleepers) from gathering or resting. Such benches are classified as hostile on this webpage in cases where the benches have separated seats, armrests, or otherwise prohibit lying down, or where they are subjected to > 50 dB Lnight due to road noise. On the other hand, benches classified as non-hostile, while not designed with the aforementioned hostility or subjected to the high level of noise pollution, may be slept on, do not facilitate it with features that may provide comfort or additional safety for the user. Lastly, benches facilitating sleep are labelled as sleep-friendly, because they enable lying down, have a backrest and no inter-seat armrest and are subjected to < 50 dB Lnight of road noise pollution.",
+    roughsleep_body3 = "This website provides a \u2018Counter-Map\u2019 showing the spatial distribution of benches in Aarhus municipality and whether these benches deter or hinder sleeping or if they facilitate it. The goal is that you (yes, you!) go exploring in / on / within the map and perhaps better understand the perspective of rough sleepers. Perhaps you will consider the needs of rough sleepers on your next visit or walk around Aarhus municipality. You may even choose to come back to this website to add the benches you saw and whether they were hostile or not."
   ),
   da = list(
     app_title      = "BENCH-marks For Care",
-    app_sub        = "Kortlægning af bænketilgængelighed i Aarhus",
+    app_sub        = "Kortl\u00e6gning af b\u00e6nketilg\u00e6ngelighed i Aarhus",
     nav_home       = "Hjem",
     nav_about      = "Om projektet",
-    nav_resources  = "Videre læsning",
+    nav_roughsleep = "Hjeml\u00f8se p\u00e5 gaden",
+    nav_resources  = "Videre l\u00e6sning",
     nav_feedback   = "Feedback",
     lang_toggle    = "EN",
     sec_basemap    = "Grundkort",
     sec_layers     = "Lag",
-    sec_noise      = "Støjomklassificering",
-    noise_label    = "Omklassificér bænke som fjendtlige ved ≥50 dB (nat)",
-    lyr_voronoi    = "Voronoi-serviceområder",
-    lyr_hostile    = "Fjendtlige bænke",
-    lyr_nonhostile = "Ikke-fjendtlige bænke",
-    lyr_friendly   = "Ikke-fjendtlige (overdækkede) bænke",
-    lyr_unknown    = "Uklassificerede bænke",
+    sec_noise      = "St\u00f8jomklassificering",
+    noise_label    = "Omklassific\u00e9r b\u00e6nke som fjendtlige ved \u226550 dB (nat)",
+    lyr_voronoi    = "Voronoi-serviceomr\u00e5der",
+    lyr_hostile    = "Fjendtlige b\u00e6nke",
+    lyr_sleepfriendly = "S\u00f8vnvenlige b\u00e6nke",
+    lyr_nonhostile = "Ikke-fjendtlige b\u00e6nke",
+    lyr_unknown    = "Uklassificerede b\u00e6nke",
     lyr_submissions= "Afventende indmeldinger",
     sec_contribute = "Bidrag",
-    contribute_txt = "Klik et sted på kortet for at indmelde en bænk.",
-    btn_add        = "+ Tilføj en bænk",
+    contribute_txt = "Klik et sted p\u00e5 kortet for at indmelde en b\u00e6nk.",
+    btn_add        = "+ Tilf\u00f8j en b\u00e6nk",
     sec_stats      = "Oversigtsstatistik",
-    sec_graph      = "Hjemløshed i Aarhus",
-    graph_note     = "Minimumsestimater fra VIVEs toårlige kortlægning (2009–2024).",
-    bor_title      = "Hjemløses Rettigheder",
+    sec_graph      = "Hjeml\u00f8shed i Aarhus",
+    graph_note     = "Minimumsestimater fra VIVEs to\u00e5rlige kortl\u00e6gning (2009\u20132024).",
+    bor_title      = "Rettighedserkl\u00e6ring for Personer i Hjeml\u00f8shed",
     bor_attr       = "Kilde: Housing Rights Watch",
-    card_title     = "Videre læsning",
+    card_title     = "Videre l\u00e6sning",
     about_title    = "Om dette projekt",
-    about_body     = "Dette projekt undersøger den strukturelle og sociale tilgængelighed af offentlige bænke i Aarhus Kommune gennem linsen af fjendtlig arkitektur og mod-kortlægning. Udviklet som en del af kurset Spatial Analytics, Cultural Data Science, Aarhus Universitet.",
+    about_body     = "Dette projekt unders\u00f8ger den strukturelle og sociale tilg\u00e6ngelighed af offentlige b\u00e6nke i Aarhus Kommune gennem linsen af fjendtlig arkitektur og mod-kortl\u00e6gning. Udviklet som en del af kurset Spatial Analytics, Cultural Data Science, Aarhus Universitet.",
     feedback_title = "Feedback og kontakt",
     feedback_body  = "Har du en korrektion eller et forslag? Kontakt os: 202308450@post.au.dk eller 202309344@post.au.dk",
-    modal_title    = "Indsend en bænk til gennemgang",
+    modal_title    = "Indsend en b\u00e6nk til gennemgang",
     modal_loc      = "Placering",
-    modal_backrest = "Ryglæn",
-    modal_armrest  = "Armlæn",
+    modal_backrest = "Rygl\u00e6n",
+    modal_armrest  = "Arml\u00e6n",
     modal_liedown  = "Kan man ligge ned?",
-    modal_covered  = "Overdækket?",
-    modal_sep      = "Adskilte sæder?",
+    modal_covered  = "Overd\u00e6kket?",
+    modal_sep      = "Adskilte s\u00e6der?",
     modal_notes    = "Noter (valgfrit)",
-    modal_hint     = "Din indmelding vises straks på kortet og gennemgås inden integration.",
+    modal_hint     = "Din indmelding vises straks p\u00e5 kortet og gennemg\u00e5s inden integration.",
     modal_cancel   = "Annuller",
     modal_submit   = "Indsend til gennemgang",
-    notif_thanks   = "Bænk indsendt — tak!",
-    pending_label  = "bænk(e) afventer gennemgang",
-    overview_pre   = "Offentlige bænke er sjældent bare bænke. I Aarhus, som i resten af Danmark, afspejler udformningen og placeringen af bymøbler beslutninger — ofte uskrevne — om, hvem der er velkomne i det offentlige rum, og hvem der ikke er. Dette mod-kort visualiserer den strukturelle tilgængelighed af bænke for personer, der sover udendørs, baseret på OpenStreetMap-data og vejtrafikstøjsmålinger, der klassificerer hver bænk som",
-    overview_post  = "eller"
+    notif_thanks   = "B\u00e6nk indsendt \u2014 tak!",
+    pending_label  = "b\u00e6nk(e) afventer gennemgang",
+    overview_pre   = "Offentlige b\u00e6nke er sj\u00e6ldent bare b\u00e6nke. I Aarhus, som i resten af Danmark, afspejler udformningen og placeringen af bym\u00f8bler beslutninger \u2014 ofte uskrevne \u2014 om, hvem der er velkomne i det offentlige rum, og hvem der ikke er. Dette mod-kort visualiserer den strukturelle tilg\u00e6ngelighed af b\u00e6nke for personer, der sover udend\u00f8rs, baseret p\u00e5 OpenStreetMap-data og vejtrafikst\u00f8jsm\u00e5linger, der klassificerer hver b\u00e6nk som",
+    overview_post  = "eller",
+    roughsleep_title = "Hjeml\u00f8se p\u00e5 gaden",
+    roughsleep_body1 = "Begrebet 'hjeml\u00f8se p\u00e5 gaden' beskriver en underkategori af hjeml\u00f8shed, hvor personer sover p\u00e5 gaden i stedet for fx at sofa-surfe eller overnatte p\u00e5 et herberg. At finde steder at sove i det offentlige rum kan dog v\u00e6re en udfordring, da bydesign ofte ikke tager hensyn til visse gruppers behov.",
+    roughsleep_body2 = "Dette website fokuserer p\u00e5, hvordan b\u00e6nke i det offentlige rum \u2014 s\u00e6rligt i Aarhus Kommune \u2014 til tider er udformet p\u00e5 m\u00e5der, der afskr\u00e6kker og fysisk forhindrer socialt s\u00e5rbare (som hjeml\u00f8se p\u00e5 gaden) i at samles eller hvile sig. S\u00e5danne b\u00e6nke klassificeres som fjendtlige, n\u00e5r de har adskilte s\u00e6der, arml\u00e6n, eller p\u00e5 anden vis forhindrer at ligge ned, eller n\u00e5r de er udsat for > 50 dB Lnat fra vejst\u00f8j. B\u00e6nke klassificeret som ikke-fjendtlige er ikke designet med ovenst\u00e5ende fjendtlighed og er ikke udsat for h\u00f8j st\u00f8jforurening. Endelig m\u00e6rkes b\u00e6nke, der muligg\u00f8r s\u00f8vn, som s\u00f8vnvenlige.",
+    roughsleep_body3 = "Dette website pr\u00e6senterer et \u2018mod-kort\u2019, der viser den rumlige fordeling af b\u00e6nke i Aarhus Kommune og angiver, om de afskr\u00e6kker eller fremmer s\u00f8vn. M\u00e5let er, at du (ja, dig!) udforsker kortet og m\u00e5ske bedre forst\u00e5r perspektivet for hjeml\u00f8se p\u00e5 gaden."
   )
 )
 
 
-# ── Homelessness data (manually editable) ────────────────────
-## Values taken from: https://www.vive.dk/media/pure/dx3jdedv/25690457
+# ── Homelessness data ────────────────────────────────────────
 
 homeless_data <- data.frame(
   year    = c(2009, 2011, 2013, 2015, 2017, 2019, 2022, 2024),
@@ -171,9 +160,7 @@ homeless_data <- data.frame(
 )
 
 
-# ── Homeless Bill of Rights (headers only) ───────────────────
-## Source: Housing Rights Watch / Aalborg Universitet
-## https://udenfor.dk/wp-content/uploads/2024/09/20488_Aalborg_Universitet_Rettighedserklaering_UK_WEB.pdf
+# ── Homeless Bill of Rights ──────────────────────────────────
 
 bill_of_rights <- list(
   en = list(
@@ -191,16 +178,16 @@ bill_of_rights <- list(
   ),
   da = list(
     list(num = "I",    text = "Retten til bolig"),
-    list(num = "II",   text = "Retten til værdig nødovernatning"),
+    list(num = "II",   text = "Retten til v\u00e6rdig n\u00f8dovernatning"),
     list(num = "III",  text = "Retten til det offentlige rum"),
     list(num = "IV",   text = "Retten til ligebehandling"),
     list(num = "V",    text = "Retten til en adresse"),
-    list(num = "VI",   text = "Retten til basale sanitære faciliteter"),
-    list(num = "VII",  text = "Retten til akut hjælp"),
+    list(num = "VI",   text = "Retten til basale sanit\u00e6re faciliteter"),
+    list(num = "VII",  text = "Retten til akut hj\u00e6lp"),
     list(num = "VIII", text = "Retten til at stemme"),
     list(num = "IX",   text = "Retten til databeskyttelse"),
     list(num = "X",    text = "Retten til privatlivets fred"),
-    list(num = "XI",   text = "Retten til lovligt at gøre ting, som er nødvendige for at overleve")
+    list(num = "XI",   text = "Retten til lovligt at g\u00f8re ting, som er n\u00f8dvendige for at overleve")
   )
 )
 
@@ -209,17 +196,17 @@ bill_of_rights <- list(
 
 reading_cards <- list(
   list(
-    title = "Den Udstødende By",
+    title = "Den Udst\u00f8dende By",
     desc  = "Exhibition catalogue on hostile design and law in Danish cities.",
     url   = "https://udenfor.dk/wp-content/uploads/2024/11/ProjektUdenfor_Katalog_Forsogsmuseet.pdf"
   ),
   list(
-    title = "VIVE: Hjemløshed i Danmark 2024",
+    title = "VIVE: Hjeml\u00f8shed i Danmark 2024",
     desc  = "Biennial mapping of homelessness in Denmark.",
     url   = "https://www.vive.dk/da/udgivelser/hjemloeshed-i-danmark-2024-22375/"
   ),
   list(
-    title = "Dark Design – Aalborg Universitet",
+    title = "Dark Design \u2013 Aalborg Universitet",
     desc  = "Ole B. Jensen's research project on social exclusion in urban space.",
     url   = "https://formkraft.dk/dark-design-hvad-sker-der-med-den-rummelige-by/"
   ),
@@ -229,20 +216,29 @@ reading_cards <- list(
     url   = "https://udenfor.dk"
   ),
   list(
-    title = "Homeless Bill of Rights",
+    title = "ENG: Homeless Bill of Rights",
     desc  = "Housing Rights Watch declaration of rights for people experiencing homelessness.",
     url   = "https://udenfor.dk/wp-content/uploads/2024/09/20488_Aalborg_Universitet_Rettighedserklaering_UK_WEB.pdf"
+  ),
+  list(
+    title = "DAN: Rettighedserkl\u00e6ring for Personer i Hjeml\u00f8shed",
+    desc  = "Den dansk version af den europ\u00e6iske Homeless Bill of Rights udarbejdet af Housing Rights Watch.",
+    url   = "https://www.feantsa.org/files/Home/Homeless-bill-of-rights/DK_Booklet.pdf"
   ),
   list(
     title = "OpenStreetMap",
     desc  = "The open mapping platform used as the primary bench data source.",
     url   = "https://www.openstreetmap.org"
+  ),
+  list(
+    title = "BENCH-marks For Care: GitHub Repository",
+    desc  = "Want to see the work behind the data and visuals? Take a look at our public GitHub repo!",
+    url   = "https://github.com/MeiSanderson/spatialProject_counterMap"
   )
 )
 
 
-# ── CSS ───────────────────────────────────────────────────────
-## Built with paste0 rather than sprintf to avoid % conflicts in CSS
+# ── CSS ──────────────────────────────────────────────────────
 
 make_css <- function(NAVY, WHITE, NAVY_MID, ORANGE, ORANGE_LIGHT, NAVY_LIGHT) {
   paste0("
@@ -309,7 +305,7 @@ body, .shiny-input-container, .selectize-input, table {
 .tab-content { background: ", NAVY, "; }
 body > .container-fluid { padding: 0 !important; }
 
-/* ── Global Bootstrap overrides — must come after Shiny loads ── */
+/* ── Global Bootstrap overrides ── */
 p, li, span, td, th, label, input, select, textarea, .checkbox label {
   font-size: inherit !important;
 }
@@ -333,10 +329,10 @@ p, li, span, td, th, label, input, select, textarea, .checkbox label {
   margin: 0;
 }
 .ov-hostile  { color: #e8651a; font-weight: 600; }
-.ov-friendly { color: #ffc425; font-weight: 600; }
-.ov-covered  { color: #52c48a; font-weight: 600; }
+.ov-friendly { color: #52c48a; font-weight: 600; }
+.ov-nonhos   { color: #ffc425; font-weight: 600; }
 
-/* ── Home layout: sidebar | map | rights panel ── */
+/* ── Home layout ── */
 .home-layout {
   display: grid;
   grid-template-columns: 290px 1fr 280px;
@@ -401,7 +397,7 @@ p, li, span, td, th, label, input, select, textarea, .checkbox label {
 .map-panel { position: relative; min-width: 0; display: flex; flex-direction: column; }
 #map { height: 100% !important; width: 100% !important; min-height: 500px; }
 
-/* ── Below-map: stats + wave graph ── */
+/* ── Below-map ── */
 .below-map {
   grid-column: 1 / -1;
   background: ", NAVY_MID, ";
@@ -507,7 +503,7 @@ table.dataTable tbody td, .table tbody td { border-color: ", NAVY_LIGHT, " !impo
 #lang_toggle:hover { background: ", ORANGE, "; border-color: ", ORANGE, "; }
 .sub-pending { font-size: 1rem !important; color: ", ORANGE_LIGHT, "; margin-top: 6px; text-align: center; }
 
-/* ── Content pages (About, Feedback, Further Reading) ── */
+/* ── Content pages ── */
 .content-page { max-width: 760px; margin: 60px auto; padding: 0 28px 60px 28px; }
 .content-page h2 {
   font-family: 'Bebas Neue', sans-serif;
@@ -527,7 +523,7 @@ table.dataTable tbody td, .table tbody td { border-color: ", NAVY_LIGHT, " !impo
 .content-page a { color: ", ORANGE_LIGHT, "; text-decoration: none; }
 .content-page a:hover { text-decoration: underline; }
 
-/* ── Reading cards (Further Reading tab) ── */
+/* ── Reading cards ── */
 .reading-card {
   background: ", NAVY_MID, ";
   border-radius: 6px;
@@ -571,6 +567,19 @@ table.dataTable tbody td, .table tbody td { border-color: ", NAVY_LIGHT, " !impo
 }
 .btn-success { background: ", ORANGE, " !important; border-color: ", ORANGE, " !important; font-size: 1.1rem !important; }
 .btn-default { background: ", NAVY_LIGHT, " !important; border-color: #3a4a5a !important; color: ", WHITE, " !important; font-size: 1.1rem !important; }
+
+/* ── Footer ── */
+.site-footer {
+  background: ", NAVY_MID, ";
+  border-top: 1px solid ", NAVY_LIGHT, ";
+  text-align: center;
+  padding: 12px 24px;
+  font-size: .78rem !important;
+  color: #5a6a7a;
+  letter-spacing: .04em;
+}
+.site-footer a { color: #5a6a7a; text-decoration: underline; }
+.site-footer a:hover { color: #8a9bb0; }
 ")
 }
 
@@ -584,24 +593,22 @@ app_css <- make_css(
 )
 
 
-# ── Leaflet palettes ──────────────────────────────────────────
+# ── Leaflet palettes ─────────────────────────────────────────
 
-# palette matches actual OSM data values: hostile, non_hostile, NA
-# non_hostile_covered included for future data; NA → grey
 pal_bench <- colorFactor(
-  palette  = c("#e8651a", "#ffc425", "#52c48a", "#3a4a5a"),
-  levels   = c("hostile", "non_hostile", "non_hostile_covered", NA),
+  palette  = c("#e8651a", "#52c48a", "#ffc425", "#3a4a5a"),
+  levels   = c("hostile", "sleep_friendly", "non_hostile", NA),
   na.color = "#3a4a5a"
 )
 
 pal_voronoi <- colorFactor(
-  palette  = c("#e8651a", "#ffc425", "#3a4a5a"),
-  levels   = c("Hostile", "Non-Hostile", "Unknown"),
+  palette  = c("#e8651a", "#52c48a", "#ffc425", "#3a4a5a"),
+  levels   = c("Hostile", "Sleep-Friendly", "Non-Hostile", "Unknown"),
   na.color = "#3a4a5a"
 )
 
 
-# ── UI ────────────────────────────────────────────────────────
+# ── UI ───────────────────────────────────────────────────────
 
 title_banner <- div(
   class = "title-banner",
@@ -618,6 +625,11 @@ title_banner <- div(
   )
 )
 
+site_footer <- div(
+  class = "site-footer",
+  HTML('Project is licensed under <a href="https://creativecommons.org/licenses/by/4.0/" target="_blank">CC BY 4.0</a>')
+)
+
 navbar_ui <- navbarPage(
   id    = "nav",
   title = NULL,
@@ -632,12 +644,11 @@ navbar_ui <- navbarPage(
     "))
   ),
   
-  # ── HOME ────────────────────────────────────────────────
+  # ── HOME ──────────────────────────────────────────────────
   tabPanel(
     uiOutput("nav_home"),
     value = "home",
     
-    # OVERVIEW BANNER ──────────────────────────────────────
     div(class = "overview-banner",
         div(class = "overview-inner",
             uiOutput("overview_text_ui")
@@ -646,64 +657,57 @@ navbar_ui <- navbarPage(
     
     div(class = "home-layout",
         
-        # LEFT SIDEBAR ──────────────────────────────────────
+        # LEFT SIDEBAR ────────────────────────────────────────
         div(class = "sidebar",
             
-            # basemap selector
             div(class = "sidebar-section",
                 uiOutput("label_basemap"),
                 selectInput("basemap_choice", NULL,
                             choices  = c("Municipality" = "municipality",
                                          "Ringvej"      = "ringvej",
                                          "Ringgade"     = "ringgade"),
-                            selected = "municipality"
-                )
+                            selected = "municipality")
             ),
             
-            # noise reclassification toggle
             div(class = "sidebar-section",
                 uiOutput("label_noise"),
                 checkboxInput("use_noise_reclass", uiOutput("noise_cb_label"), value = FALSE)
             ),
             
-            # layer toggles
             div(class = "sidebar-section",
                 uiOutput("label_layers"),
-                checkboxInput("show_voronoi",     uiOutput("lyr_voronoi"),    TRUE),
+                checkboxInput("show_voronoi",      uiOutput("lyr_voronoi"),      TRUE),
                 sliderInput("voronoi_opacity", "Opacity of Voronoi Diagram", 0, 1, .3, step = .05, ticks = FALSE),
-                checkboxInput("show_hostile",     uiOutput("lyr_hostile"),    TRUE),
-                checkboxInput("show_nonhostile",  uiOutput("lyr_nonhostile"), TRUE),
-                checkboxInput("show_friendly",    uiOutput("lyr_friendly"),   TRUE),
-                checkboxInput("show_unknown",     uiOutput("lyr_unknown"),    FALSE),
-                checkboxInput("show_submissions", uiOutput("lyr_submissions"), TRUE)
+                checkboxInput("show_hostile",      uiOutput("lyr_hostile"),      TRUE),
+                checkboxInput("show_sleepfriendly", uiOutput("lyr_sleepfriendly"), TRUE),
+                checkboxInput("show_nonhostile",   uiOutput("lyr_nonhostile"),   TRUE),
+                checkboxInput("show_unknown",      uiOutput("lyr_unknown"),      FALSE),
+                checkboxInput("show_submissions",  uiOutput("lyr_submissions"),  TRUE)
             ),
             
-            # legend
             div(class = "sidebar-section",
                 div(class = "legend-row",
                     div(class = "legend-dot", style = paste0("background:", BENCH_COLS["hostile"])),
                     span("Hostile")
                 ),
                 div(class = "legend-row",
-                    div(class = "legend-dot", style = paste0("background:", BENCH_COLS["non_hostile"])),
-                    span("Non-Hostile")
+                    div(class = "legend-dot", style = paste0("background:", BENCH_COLS["sleep_friendly"])),
+                    span("Sleep-Friendly")
                 ),
                 div(class = "legend-row",
-                    div(class = "legend-dot", style = paste0("background:", BENCH_COLS["non_hostile_covered"])),
-                    span("Non-Hostile (covered)")
+                    div(class = "legend-dot", style = paste0("background:", BENCH_COLS["non_hostile"])),
+                    span("Non-Hostile")
                 ),
                 div(class = "legend-row",
                     div(class = "legend-dot", style = "background:#3a4a5a"),
                     span("Unclassified")
                 ),
                 div(class = "legend-row",
-                    div(class = "legend-dot",
-                        style = "background:#ffffff; border:2px solid #cccccc"),
+                    div(class = "legend-dot", style = "background:#ffffff; border:2px solid #cccccc"),
                     span("Pending submission")
                 )
             ),
             
-            # contribute
             div(class = "sidebar-section",
                 uiOutput("label_contribute"),
                 uiOutput("contribute_text"),
@@ -712,19 +716,19 @@ navbar_ui <- navbarPage(
             )
         ),
         
-        # MAIN MAP ──────────────────────────────────────────
+        # MAIN MAP ────────────────────────────────────────────
         div(class = "map-panel",
             leafletOutput("map")
         ),
         
-        # RIGHT PANEL: Homeless Bill of Rights ──────────────
+        # RIGHT PANEL ─────────────────────────────────────────
         div(class = "rights-panel",
             uiOutput("rights_header"),
             uiOutput("rights_attr_ui"),
             uiOutput("rights_list_ui")
         ),
         
-        # BELOW MAP: stats | wave graph | voronoi explainer ───
+        # BELOW MAP ───────────────────────────────────────────
         div(class = "below-map",
             div(
               tags$h5(textOutput("stats_title")),
@@ -735,15 +739,22 @@ navbar_ui <- navbarPage(
               plotlyOutput("homeless_graph", height = "200px"),
               p(class = "graph-note", style = "font-size:0.8rem; line-height:1.4; color:#8fa3b8;", textOutput("graph_note_txt"))
             ),
-            div(
-              uiOutput("voronoi_explainer")
-            )
+            div(uiOutput("voronoi_explainer"))
         )
         
     ) # end home-layout
   ),
   
-  # ── ABOUT ───────────────────────────────────────────────
+  # ── ROUGH SLEEPERS ────────────────────────────────────────
+  tabPanel(
+    uiOutput("nav_roughsleep"),
+    value = "roughsleep",
+    div(class = "content-page",
+        uiOutput("roughsleep_content")
+    )
+  ),
+  
+  # ── ABOUT ─────────────────────────────────────────────────
   tabPanel(
     uiOutput("nav_about"),
     value = "about",
@@ -752,7 +763,7 @@ navbar_ui <- navbarPage(
     )
   ),
   
-  # ── FURTHER READING ─────────────────────────────────────
+  # ── FURTHER READING ───────────────────────────────────────
   tabPanel(
     uiOutput("nav_resources"),
     value = "resources",
@@ -761,7 +772,7 @@ navbar_ui <- navbarPage(
     )
   ),
   
-  # ── FEEDBACK ────────────────────────────────────────────
+  # ── FEEDBACK ──────────────────────────────────────────────
   tabPanel(
     uiOutput("nav_feedback"),
     value = "feedback",
@@ -773,69 +784,69 @@ navbar_ui <- navbarPage(
 ) # end navbarPage
 
 
-# ── SERVER ────────────────────────────────────────────────────
+# ── SERVER ───────────────────────────────────────────────────
 
 server <- function(input, output, session) {
   
-  # ── Language ────────────────────────────────────────────
+  # ── Language ──────────────────────────────────────────────
   
   lang <- reactiveVal("en")
   
   observeEvent(input$lang_toggle, {
     new_lang <- if (lang() == "en") "da" else "en"
     lang(new_lang)
-    flag  <- if (new_lang == "da") "\U0001F1EC\U0001F1E7" else "\U0001F1E9\U0001F1EA"
+    flag  <- if (new_lang == "da") "\U0001F1EC\U0001F1E7" else "\U0001F1E9\U0001F1F0"
     label <- if (new_lang == "da") "EN" else "DA"
     session$sendCustomMessage("updateLangBtn", list(flag = flag, label = label))
   })
   
   t <- reactive({ i18n[[lang()]] })
   
-  # rendered text outputs for below-map section
   output$stats_title    <- renderText({ t()$sec_stats })
   output$graph_title    <- renderText({ t()$sec_graph })
   output$graph_note_txt <- renderText({ t()$graph_note })
   
-  # ── Nav labels ──────────────────────────────────────────
+  # ── Nav labels ────────────────────────────────────────────
   
-  output$nav_home      <- renderUI(t()$nav_home)
-  output$nav_about     <- renderUI(t()$nav_about)
-  output$nav_resources <- renderUI(t()$nav_resources)
-  output$nav_feedback  <- renderUI(t()$nav_feedback)
+  output$nav_home       <- renderUI(t()$nav_home)
+  output$nav_about      <- renderUI(t()$nav_about)
+  output$nav_roughsleep <- renderUI(t()$nav_roughsleep)
+  output$nav_resources  <- renderUI(t()$nav_resources)
+  output$nav_feedback   <- renderUI(t()$nav_feedback)
   
-  # ── Overview banner ──────────────────────────────────────
+  # ── Overview banner ───────────────────────────────────────
   
   output$overview_text_ui <- renderUI({
     tr <- t()
-    hostile_word  <- if (lang() == "da") "fjendtlig,"  else "hostile,"
-    friendly_word <- if (lang() == "da") "ikke-fjendtlig," else "non-hostile,"
-    covered_word  <- if (lang() == "da") "overdækket." else "sheltered."
+    hostile_word  <- if (lang() == "da") "fjendtlig,"       else "hostile,"
+    friendly_word <- if (lang() == "da") "s\u00f8vnvenlig," else "sleep-friendly,"
+    nonhos_word   <- if (lang() == "da") "ikke-fjendtlig."  else "non-hostile."
     p(class = "overview-text",
       tr$overview_pre,
       tags$span(class = "ov-hostile",  hostile_word),
       tags$span(class = "ov-friendly", friendly_word),
-      tr$overview_post, tags$span(class = "ov-covered", covered_word)
+      tr$overview_post, tags$span(class = "ov-nonhos", nonhos_word)
     )
   })
   
-  # ── Sidebar labels ──────────────────────────────────────
+  # ── Sidebar labels ────────────────────────────────────────
   
-  output$label_basemap    <- renderUI(tags$h5(t()$sec_basemap))
-  output$label_noise      <- renderUI(tags$h5(t()$sec_noise))
-  output$noise_cb_label   <- renderUI(span(t()$noise_label, style = "font-size:.95rem"))
-  output$label_layers     <- renderUI(tags$h5(t()$sec_layers))
-  output$lyr_voronoi      <- renderUI(t()$lyr_voronoi)
-  output$lyr_hostile      <- renderUI(t()$lyr_hostile)
-  output$lyr_nonhostile   <- renderUI(t()$lyr_nonhostile)
-  output$lyr_friendly     <- renderUI(t()$lyr_friendly)
-  output$lyr_unknown      <- renderUI(t()$lyr_unknown)
-  output$lyr_submissions  <- renderUI(t()$lyr_submissions)
-  output$label_contribute <- renderUI(tags$h5(t()$sec_contribute))
-  output$contribute_text  <- renderUI(
+  output$label_basemap     <- renderUI(tags$h5(t()$sec_basemap))
+  output$label_noise       <- renderUI(tags$h5(t()$sec_noise))
+  output$noise_cb_label    <- renderUI(span(t()$noise_label, style = "font-size:.95rem"))
+  output$label_layers      <- renderUI(tags$h5(t()$sec_layers))
+  output$lyr_voronoi       <- renderUI(t()$lyr_voronoi)
+  output$lyr_hostile       <- renderUI(t()$lyr_hostile)
+  output$lyr_sleepfriendly <- renderUI(t()$lyr_sleepfriendly)
+  output$lyr_nonhostile    <- renderUI(t()$lyr_nonhostile)
+  output$lyr_unknown       <- renderUI(t()$lyr_unknown)
+  output$lyr_submissions   <- renderUI(t()$lyr_submissions)
+  output$label_contribute  <- renderUI(tags$h5(t()$sec_contribute))
+  output$contribute_text   <- renderUI(
     p(t()$contribute_txt, style = "font-size:.95rem; color:#8a9bb0; margin-bottom:8px")
   )
   
-  # ── Rights panel ────────────────────────────────────────
+  # ── Rights panel ──────────────────────────────────────────
   
   output$rights_header  <- renderUI(tags$h5(t()$bor_title))
   output$rights_attr_ui <- renderUI(p(class = "rights-attr", t()$bor_attr))
@@ -849,28 +860,24 @@ server <- function(input, output, session) {
     }))
   })
   
-  # ── Basemap ─────────────────────────────────────────────
+  # ── Basemap ───────────────────────────────────────────────
   
   active_basemap <- reactive({
     switch(input$basemap_choice,
            municipality = aarhus_municipality,
            ringvej      = aarhus_ringvej,
-           ringgade     = aarhus_ringgade
-    )
+           ringgade     = aarhus_ringgade)
   })
   
-  # ── Bench data (+ optional noise reclass) ───────────────
+  # ── Bench data ────────────────────────────────────────────
   
   active_benches <- reactive({
     bm <- active_basemap()
-    # both benches_classified and basemap polygons are WGS84 — no reproject needed
-    b  <- benches_classified %>%
-      st_intersection(st_make_valid(bm))
-    
+    b  <- benches_classified %>% sf::st_intersection(sf::st_make_valid(bm))
     if (input$use_noise_reclass && exists("bench_aarhus_night_streetNoise_50")) {
       noise_ids <- bench_aarhus_night_streetNoise_50$osm_id
       b <- b %>%
-        mutate(is_hostile = case_when(
+        dplyr::mutate(is_hostile = dplyr::case_when(
           osm_id %in% noise_ids & !is.na(is_hostile) ~ "hostile",
           TRUE ~ is_hostile
         ))
@@ -878,10 +885,10 @@ server <- function(input, output, session) {
     b
   })
   
-  benches_wgs <- reactive({ st_transform(active_benches(), 4326) })
-  voronoi_wgs <- reactive({ st_transform(voronoi_labelled, 4326) })  # voronoi is UTM 32N from pipeline
+  benches_wgs <- reactive({ sf::st_transform(active_benches(), 4326) })
+  voronoi_wgs <- reactive({ sf::st_transform(voronoi_labelled, 4326) })
   
-  # ── Submissions ─────────────────────────────────────────
+  # ── Submissions ───────────────────────────────────────────
   
   submissions <- reactiveVal({
     if (file.exists(SUBMISSIONS_CSV)) {
@@ -897,7 +904,7 @@ server <- function(input, output, session) {
   
   pending_click <- reactiveVal(NULL)
   
-  # ── Base leaflet map ────────────────────────────────────
+  # ── Base leaflet map ──────────────────────────────────────
   
   output$map <- renderLeaflet({
     leaflet() %>%
@@ -906,14 +913,14 @@ server <- function(input, output, session) {
       addProviderTiles(providers$OpenStreetMap,      group = "OSM") %>%
       addLayersControl(
         baseGroups    = c("Dark", "Light", "OSM"),
-        overlayGroups = c("Voronoi", "Hostile", "Non-Hostile",
-                          "Non-Hostile (covered)", "Unclassified", "Submissions"),
+        overlayGroups = c("Voronoi", "Hostile", "Sleep-Friendly",
+                          "Non-Hostile", "Unclassified", "Submissions"),
         options = layersControlOptions(collapsed = TRUE)
       ) %>%
       setView(lng = 10.2039, lat = 56.1629, zoom = 13)
   })
   
-  # ── Voronoi layer ───────────────────────────────────────
+  # ── Voronoi layer ─────────────────────────────────────────
   
   observe({
     proxy <- leafletProxy("map")
@@ -930,27 +937,30 @@ server <- function(input, output, session) {
     }
   })
   
-  # ── Bench point layers ──────────────────────────────────
+  # ── Bench point layers ────────────────────────────────────
   
   observe({
     b     <- benches_wgs()
     proxy <- leafletProxy("map")
-    
     proxy %>%
       clearGroup("Hostile") %>%
+      clearGroup("Sleep-Friendly") %>%
       clearGroup("Non-Hostile") %>%
-      clearGroup("Non-Hostile (covered)") %>%
       clearGroup("Unclassified")
     
     make_popup <- function(row) {
+      label <- dplyr::case_when(
+        row$is_hostile == "hostile"        ~ "Hostile",
+        row$is_hostile == "sleep_friendly" ~ "Sleep-Friendly",
+        row$is_hostile == "non_hostile"    ~ "Non-Hostile",
+        TRUE                               ~ "Unclassified"
+      )
       paste0(
-        "<b>", ifelse(is.na(row$is_hostile), "Unclassified",
-                      gsub("_", " ", row$is_hostile)), "</b><br>",
+        "<b>", label, "</b><br>",
         "Backrest: ", row$backrest,
         " | Armrest: ", row$armrest, "<br>",
         "Lie down: ", row$lying_down,
-        " | Covered: ", row$covered, "<br>",
-        "Separated seats: ", row$seats.separated
+        " | Separated seats: ", row$seats.separated
       )
     }
     
@@ -965,24 +975,20 @@ server <- function(input, output, session) {
     }
     
     if (input$show_hostile)
-      proxy <- add_layer(proxy,
-                         filter(b, !is.na(is_hostile) & is_hostile == "hostile"),
+      proxy <- add_layer(proxy, dplyr::filter(b, !is.na(is_hostile) & is_hostile == "hostile"),
                          "Hostile", "#e8651a")
+    if (input$show_sleepfriendly)
+      proxy <- add_layer(proxy, dplyr::filter(b, !is.na(is_hostile) & is_hostile == "sleep_friendly"),
+                         "Sleep-Friendly", "#52c48a")
     if (input$show_nonhostile)
-      proxy <- add_layer(proxy,
-                         filter(b, !is.na(is_hostile) & is_hostile == "non_hostile"),
+      proxy <- add_layer(proxy, dplyr::filter(b, !is.na(is_hostile) & is_hostile == "non_hostile"),
                          "Non-Hostile", "#ffc425")
-    if (input$show_friendly)
-      proxy <- add_layer(proxy,
-                         filter(b, !is.na(is_hostile) & is_hostile == "non_hostile_covered"),
-                         "Non-Hostile (covered)", "#52c48a")
     if (input$show_unknown)
-      proxy <- add_layer(proxy,
-                         filter(b, is.na(is_hostile)),
+      proxy <- add_layer(proxy, dplyr::filter(b, is.na(is_hostile)),
                          "Unclassified", "#3a4a5a")
   })
   
-  # ── Submissions layer ───────────────────────────────────
+  # ── Submissions layer ─────────────────────────────────────
   
   observe({
     s     <- submissions()
@@ -1000,117 +1006,92 @@ server <- function(input, output, session) {
           "<b>\u23f3 Pending review</b><br>",
           "Backrest: ", s$backrest,
           " | Armrest: ", s$armrest, "<br>",
-          ifelse(nchar(s$notes) > 0,
-                 paste0("Notes: ", s$notes, "<br>"), ""),
-          "<span style='color:#888;font-size:.45rem'>",
-          s$submitted_at, "</span>"
+          ifelse(nchar(s$notes) > 0, paste0("Notes: ", s$notes, "<br>"), ""),
+          "<span style='color:#888;font-size:.75rem'>", s$submitted_at, "</span>"
         )
       )
     }
   })
   
-  # ── Stats table ─────────────────────────────────────────
+  # ── Stats table ───────────────────────────────────────────
   
   output$stats_table <- renderTable({
     benches_wgs() %>%
-      st_drop_geometry() %>%
-      mutate(is_hostile = ifelse(is.na(is_hostile), "unclassified", is_hostile)) %>%
-      count(is_hostile, name = "n") %>%
-      rename(Category = is_hostile, Count = n) %>%
-      arrange(desc(Count))
+      sf::st_drop_geometry() %>%
+      dplyr::mutate(Category = dplyr::case_when(
+        is_hostile == "hostile"        ~ "Hostile",
+        is_hostile == "sleep_friendly" ~ "Sleep-Friendly",
+        is_hostile == "non_hostile"    ~ "Non-Hostile",
+        TRUE                           ~ "Unclassified"
+      )) %>%
+      dplyr::count(Category, name = "Count") %>%
+      dplyr::arrange(dplyr::desc(Count))
   }, striped = FALSE, hover = TRUE, spacing = "s",
   width = "100%", align = "lr", rownames = FALSE)
   
-  # ── Wave graph ──────────────────────────────────────────
-  ## Aarhus = orange filled wave; Denmark = grey filled wave underneath
+  # ── Wave graph ────────────────────────────────────────────
   
   output$homeless_graph <- renderPlotly({
     d <- homeless_data
-    
     plot_ly(d, x = ~year) %>%
-      
-      # Denmark — grey filled area (background wave)
       add_trace(
-        y          = ~denmark,
-        name       = "Denmark (total)",
-        type       = "scatter",
-        mode       = "lines",
-        fill       = "tozeroy",
-        line       = list(color = "#4a5a6a", width = 2, shape = "spline"),
-        fillcolor  = "rgba(74,90,106,0.35)"
+        y = ~denmark, name = "Denmark (total)", type = "scatter", mode = "lines",
+        fill = "tozeroy",
+        line = list(color = "#4a5a6a", width = 2, shape = "spline"),
+        fillcolor = "rgba(74,90,106,0.35)"
       ) %>%
-      
-      # Aarhus — orange filled area (foreground wave)
       add_trace(
-        y          = ~aarhus,
-        name       = "Aarhus municipality",
-        type       = "scatter",
-        mode       = "lines",
-        fill       = "tozeroy",
-        line       = list(color = ORANGE, width = 2.5, shape = "spline"),
-        fillcolor  = "rgba(232,101,26,0.55)"
+        y = ~aarhus, name = "Aarhus municipality", type = "scatter", mode = "lines",
+        fill = "tozeroy",
+        line = list(color = ORANGE, width = 2.5, shape = "spline"),
+        fillcolor = "rgba(232,101,26,0.55)"
       ) %>%
-      
       layout(
-        paper_bgcolor = NAVY_MID,
-        plot_bgcolor  = NAVY_MID,
-        font          = list(family = "DM Sans", color = WHITE, size = 13),
-        xaxis = list(
-          title     = "",
-          gridcolor = NAVY_LIGHT,
-          tickcolor = "#3a4a5a",
-          linecolor = "#3a4a5a"
-        ),
-        yaxis = list(
-          title     = "Min. estimate (persons)",
-          gridcolor = NAVY_LIGHT,
-          tickcolor = "#3a4a5a",
-          linecolor = "#3a4a5a",
-          titlefont = list(size = 12)
-        ),
-        legend = list(
-          orientation = "h", x = 0, y = -0.18,
-          font = list(size = 12)
-        ),
+        paper_bgcolor = NAVY_MID, plot_bgcolor = NAVY_MID,
+        font  = list(family = "DM Sans", color = WHITE, size = 13),
+        xaxis = list(title = "", gridcolor = NAVY_LIGHT, tickcolor = "#3a4a5a", linecolor = "#3a4a5a"),
+        yaxis = list(title = "Min. estimate (persons)", gridcolor = NAVY_LIGHT,
+                     tickcolor = "#3a4a5a", linecolor = "#3a4a5a", titlefont = list(size = 12)),
+        legend = list(orientation = "h", x = 0, y = -0.18, font = list(size = 12)),
         margin = list(l = 55, r = 10, t = 10, b = 45),
         hovermode = "x unified"
       )
   })
   
-  # ── Voronoi explainer ────────────────────────────────────
+  # ── Voronoi explainer ─────────────────────────────────────
+  
   output$voronoi_explainer <- renderUI({
     tagList(
       tags$h5("What are Voronoi diagrams?",
-              style = paste0(
-                "font-family:'Bebas Neue',sans-serif;",
-                "font-size:1.8rem; letter-spacing:.06em;",
-                "color:#e8651a; margin-bottom:14px; font-weight:700;"
-              )),
-      
-      p(
-        "Each coloured region on the map represents the area",
-        "closest to a particular bench — its", tags$em("service area."),
-        "If the nearest bench to you is hostile (orange), you fall",
-        "in an orange zone.",
-        style = "font-size:.85rem; color:#a0b4c8; line-height:1.7;"
-      ),
-      
-      p(
-        "This lets us see not just where hostile benches are,",
-        "but how much of the city's public space is effectively",
-        "controlled by them — making invisible patterns of exclusion",
-        "visible as geography.",
-        style = "font-size:.85rem; color:#a0b4c8; line-height:1.7; margin-top:10px;"
-      )
+              style = paste0("font-family:'Bebas Neue',sans-serif;",
+                             "font-size:1.8rem; letter-spacing:.06em;",
+                             "color:#e8651a; margin-bottom:14px; font-weight:700;")),
+      p("Each coloured region on the map represents the area closest to a particular bench \u2014 its",
+        tags$em("service area."),
+        "If the nearest bench to you is hostile (orange), you fall in an orange zone.",
+        style = "font-size:.85rem; color:#a0b4c8; line-height:1.7;"),
+      p("This lets us see not just where hostile benches are, but how much of the city's public space",
+        "is effectively controlled by them \u2014 making invisible patterns of exclusion visible as geography.",
+        style = "font-size:.85rem; color:#a0b4c8; line-height:1.7; margin-top:10px;")
     )
   })
   
-  # ── Content pages ────────────────────────────────────────
-  output$about_content <- renderUI({
+  # ── Rough Sleepers page ───────────────────────────────────
+  
+  output$roughsleep_content <- renderUI({
+    tr <- t()
     tagList(
-      tags$h2(t()$about_title),
-      p(t()$about_body)
+      tags$h2(tr$roughsleep_title),
+      p(tr$roughsleep_body1),
+      p(tr$roughsleep_body2),
+      p(tr$roughsleep_body3)
     )
+  })
+  
+  # ── Content pages ─────────────────────────────────────────
+  
+  output$about_content <- renderUI({
+    tagList(tags$h2(t()$about_title), p(t()$about_body))
   })
   
   output$resources_content <- renderUI({
@@ -1119,35 +1100,29 @@ server <- function(input, output, session) {
       tagList(lapply(reading_cards, function(card) {
         div(class = "reading-card",
             tags$a(href = card$url, target = "_blank", card$title),
-            p(card$desc)
-        )
+            p(card$desc))
       }))
     )
   })
   
   output$feedback_content <- renderUI({
-    tagList(
-      tags$h2(t()$feedback_title),
-      p(t()$feedback_body)
-    )
+    tagList(tags$h2(t()$feedback_title), p(t()$feedback_body))
   })
   
-  # ── Pending count ────────────────────────────────────────
+  # ── Pending count ─────────────────────────────────────────
   
   output$pending_count <- renderUI({
     n <- nrow(submissions())
     if (n > 0)
-      p(class = "sub-pending",
-        sprintf("\u23f3 %d %s", n, t()$pending_label))
+      p(class = "sub-pending", sprintf("\u23f3 %d %s", n, t()$pending_label))
   })
   
-  # ── Map click → submission modal ────────────────────────
+  # ── Map click → modal ─────────────────────────────────────
   
   observeEvent(input$map_click, {
     click <- input$map_click
     pending_click(click)
     tr <- t()
-    
     showModal(modalDialog(
       title = tr$modal_title,
       p(sprintf("%s: %.5f, %.5f", tr$modal_loc, click$lat, click$lng),
@@ -1174,12 +1149,11 @@ server <- function(input, output, session) {
     ))
   })
   
-  # ── Save submission ──────────────────────────────────────
+  # ── Save submission ───────────────────────────────────────
   
   observeEvent(input$confirm_submit, {
     click <- pending_click()
     req(click)
-    
     new_row <- data.frame(
       lat             = click$lat,
       lng             = click$lng,
@@ -1192,14 +1166,10 @@ server <- function(input, output, session) {
       submitted_at    = format(Sys.time(), "%Y-%m-%d %H:%M"),
       stringsAsFactors = FALSE
     )
-    
     write.table(new_row, SUBMISSIONS_CSV,
-                sep       = ",",
-                append    = file.exists(SUBMISSIONS_CSV),
+                sep = ",", append = file.exists(SUBMISSIONS_CSV),
                 col.names = !file.exists(SUBMISSIONS_CSV),
-                row.names = FALSE,
-                quote     = TRUE)
-    
+                row.names = FALSE, quote = TRUE)
     submissions(rbind(submissions(), new_row))
     removeModal()
     showNotification(t()$notif_thanks, type = "message", duration = 4)
@@ -1208,16 +1178,19 @@ server <- function(input, output, session) {
 } # end server
 
 
-# ── Assemble UI ───────────────────────────────────────────────
+# ── Assemble UI ──────────────────────────────────────────────
 
 ui <- fluidPage(
   tags$head(tags$style(HTML("
     body > .container-fluid { padding: 0 !important; }
   "))),
   title_banner,
-  navbar_ui
+  navbar_ui,
+  site_footer
 )
 
-# ────────────────────────────────────────────────────────────────────────────
+# ─────────────────────────────────────────────────────────────
 
 shinyApp(ui, server)
+
+####################################################
