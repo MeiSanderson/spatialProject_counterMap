@@ -656,23 +656,3 @@ mapview(voronoi_labelled, zcol = "category",
 
 
 ```
-
-
-## HELP for Paper stuff_to be deleted
-
-```{r data}
-
-print(unique(st_geometry_type(raw_streetNoise)))
-
-```
-
-```{r citation}
-
-pacman::p_load(attachment)
-attachment::att_from_rmd("MAIN.Rmd") # packages used
-
-packageVersion("mapview")
-citation(package="mapview")
-
-
-```
