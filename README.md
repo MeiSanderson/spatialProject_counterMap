@@ -1,4 +1,4 @@
-# Spatial Project 2026: Benchmarks for Care - Counter-Mapping Benches in Aarhus, Denmark
+# Spatial Analytics Project 2026: BENCH-marks For Care - Counter-Mapping Benches in Aarhus, Denmark
 
 ## Overview
 ### Project Description
@@ -28,13 +28,12 @@ out/
   └── initial_benchClassification_ringgade.csv              # distribution of classified benches (before road noise pollution); Aarhus area based on Ringgaden
   └── initial_benchClassification_ringvej.csv               # distribution of classified benches (before road noise pollution); Aarhus area based on Ringvejen
 
-shinyApp/                    # folder used to run the ShinyApp
-  └── BenchmarksForCare/
-  └── data/
+shinyApp/               # folder used to run the ShinyApp
+  └── data/                 # copy of data/ in root, used for running the data_pipeline.r
   └── rsconnect/
-  └── app.r                 # folder used to run the ShinyApp
-  └── app_data.rds          # not to be run; data serialisation, i.e., saved R object for the ShinyApp data
-  └── data_pipeline.r       # folder used to prepare the data for the ShinyApp
+  └── app.r                 # file used to run the ShinyApp
+  └── app_data.rds          # data serialisation, i.e., saved R object for the ShinyApp data
+  └── data_pipeline.r       # file used to prepare app_data.rds for the ShinyApp
 
 
 MAIN.Rmd                                    # MAIN script
@@ -55,7 +54,9 @@ chooseBasemap <- "municipality"  # options: "ringvej", "ringgade", "municipality
 
 This controls which basemap is used throughout — Aarhus municipality as a whole, or the smaller areas bounded by Aarhus ringvej or ringgade respectively.
 
-The ShinyApp (our counter-map) can be accessed via the following link, where Shiny-io is used to deploy our ShinyApp without needing to establish a new server: https://aiswarya.shinyapps.io/BenchmarksForCare/. Otherwise, running the ShinyApp requires running multiple files, within the BenchmarksForCare/ folder: (1) run data_pipeline.R, which loads and prepares all the data for the Shiny App (incl. classifications and voronoi diagrams). This is then saved to the app_data.rds file. (2) run app.R, which sets up the app and runs the application with the specified user interface.
+The ShinyApp (our counter-map), titled **BENCH-marks For Care**, can be accessed via the following link, where Shiny-io is used to deploy our ShinyApp without needing to establish a new server: https://aiswarya.shinyapps.io/BenchmarksForCare/. Otherwise, running the ShinyApp requires running multiple files, within the BenchmarksForCare/ folder: (1) run data_pipeline.R, which loads and prepares all the data for the Shiny App (incl. classifications and voronoi diagrams). This is then saved to the app_data.rds file. (2) run app.R, which sets up the app and runs the application with the specified user interface.
+
+***N.B.*:** Unless you make changes to the data_pipeline.R script, the app_data.rds file may be used as is and app.R may be run directly. However, if issues *do* occur when running app.R, feel free to run data_pipeline.R, ensure the app_data.rds is saved in the appropriate location relative to your working directory, and restart the R session, before re-running app.R.
 
 ### Data Preparation
 Most data is downloaded or generated automatically on first run. However, note the following:
