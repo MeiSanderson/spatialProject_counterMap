@@ -54,7 +54,7 @@ This controls which basemap is used throughout — Aarhus municipality as a whol
 Most data is downloaded or generated automatically on first run. However, note the following:
 
 * Noise pollution data (from Miljøstyrelsen via MiljøGIS) exceeds GitHub's file size limits and cannot be downloaded programmatically. Pre-processed versions clipped to each basemap are saved in data/ and loaded directly — the code originally used for downloading the data can be found in the Road_Noise_Pollution_Data_Download.RMD, but should not be run.
-* Output files (classification counts, noise proportion tables, Voronoi summaries) are saved automatically to out/ during the run. **TO ADDRESS**
+* Output files (classification counts, noise proportion tables) are saved automatically to out/ during the run of MAIN.rmd.
 
 All data uses the WGS84 (EPSG:4326) CRS; no manual CRS conversion is required on input. Voronoi analysis transforms to EPSG:25832 (UTM 32N) internally.
 
